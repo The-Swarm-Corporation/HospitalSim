@@ -6,8 +6,9 @@ __pycache__/
 # C extensions
 *.so
 .vscode/
+agent_workspace
 .vscode
-
+hospital_data
 # Distribution / packaging
 .Python
 build/
