@@ -2,7 +2,47 @@
 
 **Enterprise-Grade Hospital Management & Simulation System**
 
-[![Join our Discord](https://img.shields.io/badge/Discord-Join%20our%20server-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/agora-999382051935506503) [![Subscribe on YouTube](https://img.shields.io/badge/YouTube-Subscribe-red?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/@kyegomez3242) [![Connect on LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/kye-g-38759a207/) [![Follow on X.com](https://img.shields.io/badge/X.com-Follow-1DA1F2?style=for-the-badge&logo=x&logoColor=white)](https://x.com/kyegomezb)
+[![Join our Discord](https://img.shields.io/badge/Discord-Join%20our%20server-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/EamjgSaEQf) [![Explore Swarms Platform](https://img.shields.io/badge/Swarms-Platform-purple?style=for-the-badge&logo=web&logoColor=white)](https://swarms.ai) [![Try Simulations](https://img.shields.io/badge/Simulations-Try%20Now-orange?style=for-the-badge&logo=experiment&logoColor=white)](https://swarms.ai/simulations) [![Subscribe on YouTube](https://img.shields.io/badge/YouTube-Subscribe-red?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/@kyegomez3242) [![Connect on LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/kye-g-38759a207/) [![Follow on X.com](https://img.shields.io/badge/X.com-Follow-1DA1F2?style=for-the-badge&logo=x&logoColor=white)](https://x.com/kyegomezb)
+
+## System Architecture Flow
+
+```mermaid
+flowchart TD
+    A[Patient Arrives] --> B[Reception Check-in]
+    B --> C[Patient Queue]
+    C --> D{Triage Assessment}
+    D --> E[Priority Scoring]
+    E --> F{Emergency?}
+    F -->|Yes| G[Emergency Doctor]
+    F -->|No| H[General Doctor]
+    G --> I[Consultation]
+    H --> I[Consultation]
+    I --> J[Diagnosis & Treatment Plan]
+    J --> K[EHR Documentation]
+    K --> L[Patient Discharge]
+    
+    M[Executive Team] --> N[Strategic Meetings]
+    N --> O[Hospital Operations]
+    O --> P[Performance Analytics]
+    P --> Q[Resource Optimization]
+    
+    R[ChromaDB EHR] --> S[Patient History]
+    S --> I
+    R --> T[Similar Cases]
+    T --> I
+    
+    U[AI Agents] --> B
+    U --> D
+    U --> G
+    U --> H
+    U --> M
+    
+    style A fill:#e1f5fe
+    style L fill:#c8e6c9
+    style M fill:#fce4ec
+    style R fill:#f3e5f5
+    style U fill:#fff3e0
+```
 
 ## Overview
 
