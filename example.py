@@ -34,7 +34,7 @@ def custom_patient_example():
     # Create custom patients
     custom_patients = [
         Patient(
-            name="Alice Johnson",
+            name="Isabella Fernandez",
             age=35,
             gender="Female",
             chief_complaint="Severe migraine",
@@ -49,7 +49,7 @@ def custom_patient_example():
             allergies=["aspirin"],
         ),
         Patient(
-            name="Bob Martinez",
+            name="Amir Hassan",
             age=52,
             gender="Male",
             chief_complaint="Chest tightness",
@@ -63,7 +63,7 @@ def custom_patient_example():
             allergies=["sulfa drugs"],
         ),
         Patient(
-            name="Carol Williams",
+            name="Yuki Tanaka",
             age=28,
             gender="Female",
             chief_complaint="Fever and sore throat",
@@ -97,7 +97,7 @@ def emergency_scenario_example():
     # Create emergency patients
     emergency_patients = [
         Patient(
-            name="David Chen",
+            name="Rafael Mendoza",
             age=45,
             gender="Male",
             chief_complaint="Chest pain radiating to arm",
@@ -112,7 +112,7 @@ def emergency_scenario_example():
             allergies=[],
         ),
         Patient(
-            name="Emma Rodriguez",
+            name="Fatima Al-Zahra",
             age=67,
             gender="Female",
             chief_complaint="Sudden severe headache",
@@ -127,7 +127,7 @@ def emergency_scenario_example():
             allergies=["heparin"],
         ),
         Patient(
-            name="Frank Thompson",
+            name="Kwame Osei",
             age=38,
             gender="Male",
             chief_complaint="Severe abdominal pain",
@@ -160,7 +160,7 @@ def ehr_demo_example():
 
     # Create a patient with complex medical history
     complex_patient = Patient(
-        name="Grace Anderson",
+        name="Elena Rossi",
         age=58,
         gender="Female",
         chief_complaint="Chronic back pain worsening",

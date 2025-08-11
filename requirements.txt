@@ -1,3 +1,4 @@
 swarms
 chromadb
 pydantic
+loguru

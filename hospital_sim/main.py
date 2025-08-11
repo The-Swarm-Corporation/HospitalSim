@@ -40,23 +40,6 @@ except ImportError:
     )
     CHROMADB_AVAILABLE = False
 
-# Configure loguru logging
-logger.remove()  # Remove default handler
-logger.add(
-    "hospital_simulation.log",
-    rotation="10 MB",
-    retention="7 days",
-    level="INFO",
-    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}",
-    backtrace=True,
-    diagnose=True
-)
-logger.add(
-    lambda msg: print(msg, end=""),
-    level="INFO",
-    format="<green>{time:HH:mm:ss}</green> | <level>{level}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | <level>{message}</level>\n"
-)
-
 
 class PatientStatus(Enum):
     """Patient status enumeration."""
@@ -106,10 +89,14 @@ class Patient:
 
     def __post_init__(self):
         """Calculate priority score based on symptoms and vital signs and create agent."""
-        logger.info(f"Creating patient: {self.name}, Age: {self.age}, Chief Complaint: {self.chief_complaint}")
+        logger.info(
+            f"Creating patient: {self.name}, Age: {self.age}, Chief Complaint: {self.chief_complaint}"
+        )
         self.calculate_priority()
         self._create_agent()
-        logger.debug(f"Patient {self.name} initialized with priority score: {self.priority_score}")
+        logger.debug(
+            f"Patient {self.name} initialized with priority score: {self.priority_score}"
+        )
 
     def calculate_priority(self):
         """Calculate patient priority score (higher = more urgent)."""
@@ -152,7 +139,9 @@ class Patient:
                 score += 7
 
         self.priority_score = min(score, 20)  # Cap at 20
-        logger.debug(f"Patient {self.name} priority calculated: {self.priority_score} (Emergency: {score >= 15})")
+        logger.debug(
+            f"Patient {self.name} priority calculated: {self.priority_score} (Emergency: {score >= 15})"
+        )
 
     def _create_agent(self):
         """Create an Agent instance from patient data."""
@@ -274,7 +263,9 @@ class EHRSystem:
                     },
                 )
 
-            logger.info(f"EHR System initialized with ChromaDB collection: {self.collection_name}")
+            logger.info(
+                f"EHR System initialized with ChromaDB collection: {self.collection_name}"
+            )
             print(
                 f"✅ EHR System initialized with ChromaDB collection: {self.collection_name}"
             )
@@ -295,7 +286,9 @@ class EHRSystem:
     ) -> str:
         """Add patient medical record to EHR."""
         record_id = f"record_{patient.patient_id}_{int(time.time())}"
-        logger.info(f"Adding patient record to EHR: {patient.name} (ID: {patient.patient_id}) - Doctor: {doctor_name}")
+        logger.info(
+            f"Adding patient record to EHR: {patient.name} (ID: {patient.patient_id}) - Doctor: {doctor_name}"
+        )
 
         # Create comprehensive medical record
         record_content = f"""
@@ -706,7 +699,7 @@ class HospitalSimulation:
 
         # Doctors
         emergency_doctor = Agent(
-            agent_name="Dr. Emergency",
+            agent_name="Dr. Aisha Patel",
             system_prompt="""You are an Emergency Medicine physician. Your responsibilities include:
             - Rapid patient assessment and triage
             - Emergency treatment and stabilization
@@ -730,7 +723,7 @@ class HospitalSimulation:
         )
 
         general_doctor = Agent(
-            agent_name="Dr. General",
+            agent_name="Dr. Marcus Chen",
             system_prompt="""You are a General Practice physician. Your responsibilities include:
             - Comprehensive patient evaluation
             - Diagnosis and treatment of common conditions
@@ -755,7 +748,7 @@ class HospitalSimulation:
 
         # Nurses
         triage_nurse = Agent(
-            agent_name="Nurse Triage",
+            agent_name="Nurse Sofia Rodriguez",
             system_prompt="""You are a Triage Nurse. Your responsibilities include:
             - Initial patient assessment and vital signs
             - Patient triage and priority assignment
@@ -778,7 +771,7 @@ class HospitalSimulation:
         )
 
         floor_nurse = Agent(
-            agent_name="Nurse Floor",
+            agent_name="Nurse James Thompson",
             system_prompt="""You are a Floor Nurse. Your responsibilities include:
             - Patient care and monitoring
             - Medication administration
@@ -802,7 +795,7 @@ class HospitalSimulation:
 
         # Receptionists
         receptionist = Agent(
-            agent_name="Reception",
+            agent_name="Maya Williams",
             system_prompt="""You are a Hospital Receptionist. Your responsibilities include:
             - Patient check-in and registration
             - Appointment scheduling and management
@@ -833,25 +826,25 @@ class HospitalSimulation:
 
         self.doctors = [
             HospitalStaff(
-                "Dr. Emergency", StaffRole.DOCTOR, emergency_doctor
+                "Dr. Aisha Patel", StaffRole.DOCTOR, emergency_doctor
             ),
             HospitalStaff(
-                "Dr. General", StaffRole.DOCTOR, general_doctor
+                "Dr. Marcus Chen", StaffRole.DOCTOR, general_doctor
             ),
         ]
 
         self.nurses = [
             HospitalStaff(
-                "Nurse Triage", StaffRole.NURSE, triage_nurse
+                "Nurse Sofia Rodriguez", StaffRole.NURSE, triage_nurse
             ),
             HospitalStaff(
-                "Nurse Floor", StaffRole.NURSE, floor_nurse
+                "Nurse James Thompson", StaffRole.NURSE, floor_nurse
             ),
         ]
 
         self.receptionists = [
             HospitalStaff(
-                "Reception", StaffRole.RECEPTIONIST, receptionist
+                "Maya Williams", StaffRole.RECEPTIONIST, receptionist
             )
         ]
 
@@ -865,13 +858,18 @@ class HospitalSimulation:
             for staff in staff_list:
                 self.staff[staff.name] = staff
 
-        logger.info(f"Hospital staff initialized: {len(self.staff)} staff members")
+        logger.info(
+            f"Hospital staff initialized: {len(self.staff)} staff members"
+        )
         print(
             f"✅ Hospital staff initialized: {len(self.staff)} staff members"
         )
 
     def add_patient(self, patient: Patient):
         """Add a new patient to the hospital."""
+        logger.info(
+            f"New patient arrival: {patient.name} - {patient.chief_complaint}"
+        )
         # Receptionist processes patient check-in
         receptionist = self.receptionists[0]
         if receptionist.is_available:
@@ -893,6 +891,15 @@ class HospitalSimulation:
 
             receptionist.release_patient()
 
+            logger.info(
+                f"Patient {patient.name} checked in and added to queue"
+            )
+            logger.debug(
+                f"Reception interaction: {check_in_result[:100]}..."
+            )
+            logger.debug(
+                f"Patient response: {patient_response[:100]}..."
+            )
             print(
                 f"✅ Patient {patient.name} checked in and added to queue"
             )
@@ -901,6 +908,9 @@ class HospitalSimulation:
             )
             print(f"   Patient response: {patient_response[:100]}...")
         else:
+            logger.warning(
+                f"Receptionist busy, patient {patient.name} waiting"
+            )
             print(
                 f"⚠️ Receptionist busy, patient {patient.name} waiting"
             )
@@ -915,6 +925,10 @@ class HospitalSimulation:
         if not patient:
             return
 
+        logger.info(
+            f"Processing patient from queue: {patient.name} (Priority: {patient.priority_score})"
+        )
+
         # Find available staff
         available_nurse = next(
             (n for n in self.nurses if n.is_available), None
@@ -924,6 +938,9 @@ class HospitalSimulation:
         )
 
         if available_nurse and available_doctor:
+            logger.info(
+                f"Starting triage for {patient.name} with {available_nurse.name}"
+            )
             # Triage with nurse
             available_nurse.assign_patient(patient)
             patient.status = PatientStatus.IN_TRIAGE
@@ -946,6 +963,9 @@ class HospitalSimulation:
 
             available_nurse.release_patient()
 
+            logger.info(
+                f"Triage completed for {patient.name}, starting consultation with {available_doctor.name}"
+            )
             # Doctor consultation
             available_doctor.assign_patient(patient)
             patient.status = PatientStatus.WITH_DOCTOR
@@ -1010,6 +1030,9 @@ class HospitalSimulation:
             self.simulation_stats["patients_treated"] += 1
             self.total_wait_time += treatment_time
 
+            logger.info(
+                f"Patient {patient.name} treated by {available_doctor.name} - Diagnosis: {diagnosis} - Time: {treatment_time:.1f} minutes"
+            )
             print(
                 f"✅ Patient {patient.name} treated by {available_doctor.name}"
             )
@@ -1161,7 +1184,7 @@ class HospitalSimulation:
         """Generate sample patients for simulation."""
         sample_patients = [
             Patient(
-                name="John Smith",
+                name="Xavier Delacroix",
                 age=45,
                 gender="Male",
                 chief_complaint="Chest pain",
@@ -1173,10 +1196,10 @@ class HospitalSimulation:
                 medical_history=["hypertension", "diabetes"],
                 current_medications=["metformin", "lisinopril"],
                 allergies=["penicillin"],
-                system_prompt="You are John Smith, a 45-year-old man experiencing chest pain. You're worried this might be a heart attack because you have a history of high blood pressure and diabetes. You're sweating and feeling anxious. Be cooperative with medical staff but express your concerns about your heart.",
+                system_prompt="You are Xavier Delacroix, a 45-year-old man experiencing chest pain. You're worried this might be a heart attack because you have a history of high blood pressure and diabetes. You're sweating and feeling anxious. Be cooperative with medical staff but express your concerns about your heart.",
             ),
             Patient(
-                name="Sarah Johnson",
+                name="Zara Al-Rashid",
                 age=32,
                 gender="Female",
                 chief_complaint="Severe headache",
@@ -1184,10 +1207,10 @@ class HospitalSimulation:
                 medical_history=["migraines"],
                 current_medications=["sumatriptan"],
                 allergies=[],
-                system_prompt="You are Sarah Johnson, a 32-year-old woman with a severe migraine. You have a history of migraines but this one feels different and more intense. The light is bothering you and you feel nauseous. You're hoping to get something stronger for the pain.",
+                system_prompt="You are Zara Al-Rashid, a 32-year-old woman with a severe migraine. You have a history of migraines but this one feels different and more intense. The light is bothering you and you feel nauseous. You're hoping to get something stronger for the pain.",
             ),
             Patient(
-                name="Michael Brown",
+                name="Kofi Asante",
                 age=58,
                 gender="Male",
                 chief_complaint="Fever and cough",
@@ -1195,10 +1218,10 @@ class HospitalSimulation:
                 medical_history=["asthma"],
                 current_medications=["albuterol inhaler"],
                 allergies=["sulfa drugs"],
-                system_prompt="You are Michael Brown, a 58-year-old man with flu-like symptoms. You have asthma and you're concerned about your breathing. You've been coughing a lot and feel very tired. You want to make sure it's not something serious affecting your lungs.",
+                system_prompt="You are Kofi Asante, a 58-year-old man with flu-like symptoms. You have asthma and you're concerned about your breathing. You've been coughing a lot and feel very tired. You want to make sure it's not something serious affecting your lungs.",
             ),
             Patient(
-                name="Emily Davis",
+                name="Priya Sharma",
                 age=28,
                 gender="Female",
                 chief_complaint="Abdominal pain",
@@ -1206,10 +1229,10 @@ class HospitalSimulation:
                 medical_history=["appendicitis"],
                 current_medications=[],
                 allergies=[],
-                system_prompt="You are Emily Davis, a 28-year-old woman with severe abdominal pain. You had your appendix removed before, so you're worried about what could be causing this pain. You've been vomiting and the pain is getting worse.",
+                system_prompt="You are Priya Sharma, a 28-year-old woman with severe abdominal pain. You had your appendix removed before, so you're worried about what could be causing this pain. You've been vomiting and the pain is getting worse.",
             ),
             Patient(
-                name="Robert Wilson",
+                name="Dmitri Volkov",
                 age=67,
                 gender="Male",
                 chief_complaint="Dizziness",
@@ -1217,7 +1240,7 @@ class HospitalSimulation:
                 medical_history=["hypertension", "heart disease"],
                 current_medications=["atenolol", "aspirin"],
                 allergies=["codeine"],
-                system_prompt="You are Robert Wilson, a 67-year-old man feeling dizzy and confused. You have heart problems and high blood pressure, so you're worried this might be related. You feel weak and unsteady. Your family brought you in because they're concerned.",
+                system_prompt="You are Dmitri Volkov, a 67-year-old man feeling dizzy and confused. You have heart problems and high blood pressure, so you're worried this might be related. You feel weak and unsteady. Your family brought you in because they're concerned.",
             ),
         ]
 
@@ -1265,6 +1288,7 @@ class HospitalSimulation:
                 allergies=patient_record.get("allergies", []),
             )
         except Exception as e:
+            logger.error(f"Failed to create patient: {str(e)}")
             return {
                 "error": f"Failed to create patient: {str(e)}",
                 "status": "failed",
@@ -1337,6 +1361,9 @@ class HospitalSimulation:
             }
 
         except Exception as e:
+            logger.error(
+                f"Error processing patient {patient.name}: {str(e)}"
+            )
             return {
                 "patient_id": patient.patient_id,
                 "patient_name": patient.name,
@@ -1521,6 +1548,9 @@ class HospitalSimulation:
         patient_arrival_rate: float = 0.1,
     ):
         """Run the hospital simulation."""
+        logger.info(
+            f"Starting {self.hospital_name} simulation for {duration_minutes} minutes (arrival rate: {patient_arrival_rate})"
+        )
         print(
             f"🏥 Starting {self.hospital_name} simulation for {duration_minutes} minutes"
         )
@@ -1544,6 +1574,9 @@ class HospitalSimulation:
                     if (
                         random.random() < 0.3
                     ):  # 30% chance of new patient
+                        logger.debug(
+                            "Generating new random patient arrival"
+                        )
                         self.generate_patients(1)
                         last_patient_time = current_time
 
@@ -1555,6 +1588,7 @@ class HospitalSimulation:
                     int((current_time - start_time) / 60) % 15 == 0
                     and int((current_time - start_time) / 60) > 0
                 ):
+                    logger.info("Holding executive meeting")
                     self.executive_meeting()
 
                 # Update statistics
@@ -1570,9 +1604,11 @@ class HospitalSimulation:
                 time.sleep(1)  # 1 second simulation tick
 
         except KeyboardInterrupt:
+            logger.info("Simulation stopped by user")
             print("\n⏹️ Simulation stopped by user")
         finally:
             self.is_running = False
+            logger.info("Simulation ended")
             self.print_final_report()
 
     def print_status(self):
