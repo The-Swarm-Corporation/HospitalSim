@@ -1,4 +1,7 @@
+
 # HospitalSim
+
+![BACK GROUND IMAGE](bg.jpg)
 
 **Enterprise-Grade Hospital Management & Simulation System**
 

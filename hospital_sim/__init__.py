@@ -26,6 +26,7 @@ from queue import PriorityQueue
 
 from swarms import Agent
 from swarms.structs.hiearchical_swarm import HierarchicalSwarm
+from loguru import logger
 
 # Try to import ChromaDB for RAG system
 try:
