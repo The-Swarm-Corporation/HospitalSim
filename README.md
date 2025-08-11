@@ -36,12 +36,7 @@ flowchart TD
     U --> G
     U --> H
     U --> M
-    
-    style A fill:#e1f5fe
-    style L fill:#c8e6c9
-    style M fill:#fce4ec
-    style R fill:#f3e5f5
-    style U fill:#fff3e0
+
 ```
 
 ## Overview
