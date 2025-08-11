@@ -7,6 +7,12 @@
 
 [![Join our Discord](https://img.shields.io/badge/Discord-Join%20our%20server-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/EamjgSaEQf) [![Explore Swarms Platform](https://img.shields.io/badge/Swarms-Platform-purple?style=for-the-badge&logo=web&logoColor=white)](https://swarms.ai) [![Try Simulations](https://img.shields.io/badge/Simulations-Try%20Now-orange?style=for-the-badge&logo=experiment&logoColor=white)](https://swarms.ai/simulations) [![Subscribe on YouTube](https://img.shields.io/badge/YouTube-Subscribe-red?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/@kyegomez3242) [![Connect on LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/kye-g-38759a207/) [![Follow on X.com](https://img.shields.io/badge/X.com-Follow-1DA1F2?style=for-the-badge&logo=x&logoColor=white)](https://x.com/kyegomezb)
 
+
+
+## Overview
+
+HospitalSim is a sophisticated multi-agent hospital management and simulation system designed to optimize healthcare operations through intelligent automation. This enterprise-grade solution provides comprehensive patient care simulation, electronic health records management, and operational analytics to improve hospital efficiency and patient outcomes.
+
 ## System Architecture Flow
 
 ```mermaid
@@ -41,10 +47,6 @@ flowchart TD
     U --> M
 
 ```
-
-## Overview
-
-HospitalSim is a sophisticated multi-agent hospital management and simulation system designed to optimize healthcare operations through intelligent automation. This enterprise-grade solution provides comprehensive patient care simulation, electronic health records management, and operational analytics to improve hospital efficiency and patient outcomes.
 
 ## Key Features
 

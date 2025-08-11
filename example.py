@@ -6,7 +6,7 @@ This script demonstrates how to use the hospital simulation system
 with different scenarios and configurations.
 """
 
-from hospital_sim import HospitalSimulation, Patient
+from hospital_sim.main import HospitalSimulation, Patient
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -34,7 +34,7 @@ def custom_patient_example():
     # Create custom patients
     custom_patients = [
         Patient(
-            name="Isabella Fernandez",
+            name="Aurora Dreamweaver",
             age=35,
             gender="Female",
             chief_complaint="Severe migraine",
@@ -49,7 +49,7 @@ def custom_patient_example():
             allergies=["aspirin"],
         ),
         Patient(
-            name="Amir Hassan",
+            name="Jasper Stormcloud",
             age=52,
             gender="Male",
             chief_complaint="Chest tightness",
@@ -63,7 +63,7 @@ def custom_patient_example():
             allergies=["sulfa drugs"],
         ),
         Patient(
-            name="Yuki Tanaka",
+            name="Nova Celestine",
             age=28,
             gender="Female",
             chief_complaint="Fever and sore throat",
@@ -97,7 +97,7 @@ def emergency_scenario_example():
     # Create emergency patients
     emergency_patients = [
         Patient(
-            name="Rafael Mendoza",
+            name="Phoenix Razorcrest",
             age=45,
             gender="Male",
             chief_complaint="Chest pain radiating to arm",
@@ -112,7 +112,7 @@ def emergency_scenario_example():
             allergies=[],
         ),
         Patient(
-            name="Fatima Al-Zahra",
+            name="Sage Whisperwind",
             age=67,
             gender="Female",
             chief_complaint="Sudden severe headache",
@@ -127,7 +127,7 @@ def emergency_scenario_example():
             allergies=["heparin"],
         ),
         Patient(
-            name="Kwame Osei",
+            name="Titan Shadowmere",
             age=38,
             gender="Male",
             chief_complaint="Severe abdominal pain",
@@ -160,7 +160,7 @@ def ehr_demo_example():
 
     # Create a patient with complex medical history
     complex_patient = Patient(
-        name="Elena Rossi",
+        name="Nebula Starforge",
         age=58,
         gender="Female",
         chief_complaint="Chronic back pain worsening",

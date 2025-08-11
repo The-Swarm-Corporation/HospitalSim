@@ -26,7 +26,6 @@ from queue import PriorityQueue
 
 from swarms import Agent
 from swarms.structs.hiearchical_swarm import HierarchicalSwarm
-from loguru import logger
 
 # Try to import ChromaDB for RAG system
 try:
@@ -64,7 +63,7 @@ class StaffRole(Enum):
 
 @dataclass
 class Patient:
-    """Patient model with medical information and agent capabilities."""
+    """Patient model with medical information."""
 
     patient_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = ""
@@ -84,13 +83,10 @@ class Patient:
     diagnosis: Optional[str] = None
     treatment_plan: Optional[str] = None
     discharge_notes: Optional[str] = None
-    system_prompt: str = ""
-    agent: Optional[Agent] = field(default=None, init=False)
 
     def __post_init__(self):
-        """Calculate priority score based on symptoms and vital signs and create agent."""
+        """Calculate priority score based on symptoms and vital signs."""
         self.calculate_priority()
-        self._create_agent()
 
     def calculate_priority(self):
         """Calculate patient priority score (higher = more urgent)."""
@@ -134,43 +130,6 @@ class Patient:
 
         self.priority_score = min(score, 20)  # Cap at 20
 
-    def _create_agent(self):
-        """Create an Agent instance from patient data."""
-        if not self.system_prompt:
-            self.system_prompt = (
-                self._generate_default_system_prompt()
-            )
-
-        self.agent = Agent(
-            agent_name=f"Patient_{self.name.replace(' ', '_')}",
-            system_prompt=self.system_prompt,
-            model_name="gpt-4o-mini",
-            max_loops=1,
-        )
-
-    def _generate_default_system_prompt(self) -> str:
-        """Generate a default system prompt for the patient agent."""
-        return f"""You are {self.name}, a {self.age}-year-old {self.gender.lower()} patient who has come to the hospital.
-        
-        Your medical information:
-        - Chief Complaint: {self.chief_complaint}
-        - Current Symptoms: {', '.join(self.symptoms) if self.symptoms else 'None reported'}
-        - Medical History: {', '.join(self.medical_history) if self.medical_history else 'No significant history'}
-        - Current Medications: {', '.join(self.current_medications) if self.current_medications else 'None'}
-        - Known Allergies: {', '.join(self.allergies) if self.allergies else 'No known allergies'}
-        
-        When interacting with hospital staff:
-        1. Describe your symptoms accurately and honestly
-        2. Answer questions about your medical history
-        3. Express your concerns and pain levels appropriately
-        4. Ask relevant questions about your condition and treatment
-        5. Be cooperative but realistic about how you're feeling
-        6. Show appropriate emotional responses based on your condition severity
-        
-        Stay in character as this patient throughout all interactions. Be consistent with your symptoms and medical history.
-        If you're in pain or distress, express it appropriately. If you're feeling better, you can show relief.
-        Remember that you are seeking medical help and want to get better."""
-
     def to_dict(self) -> Dict[str, Any]:
         """Convert patient to dictionary for storage."""
         return {
@@ -192,7 +151,6 @@ class Patient:
             "diagnosis": self.diagnosis,
             "treatment_plan": self.treatment_plan,
             "discharge_notes": self.discharge_notes,
-            "system_prompt": self.system_prompt,
         }
 
     @classmethod
@@ -202,9 +160,6 @@ class Patient:
         data["arrival_time"] = datetime.fromisoformat(
             data["arrival_time"]
         )
-        # Ensure system_prompt is included, set default if missing
-        if "system_prompt" not in data:
-            data["system_prompt"] = ""
         return cls(**data)
 
 
@@ -243,7 +198,7 @@ class EHRSystem:
                 self.collection = self.client.get_collection(
                     self.collection_name
                 )
-            except Exception:
+            except:
                 self.collection = self.client.create_collection(
                     name=self.collection_name,
                     metadata={
@@ -851,14 +806,10 @@ class HospitalSimulation:
         if receptionist.is_available:
             receptionist.assign_patient(patient)
 
-            # Process check-in with patient interaction
-            check_in_prompt = "Greet and check in the patient. Ask for their name, age, chief complaint, and gather initial information."
-            check_in_result = receptionist.agent.run(check_in_prompt)
-
-            # Patient responds to check-in
-            patient_response = patient.agent.run(
-                f"You are at the hospital reception desk. The receptionist is checking you in and asking for information. "
-                f"Respond appropriately and provide your information: {check_in_result}"
+            # Process check-in
+            check_in_result = receptionist.agent.run(
+                f"Process check-in for patient: {patient.name}, Age: {patient.age}, "
+                f"Chief Complaint: {patient.chief_complaint}, Symptoms: {', '.join(patient.symptoms)}"
             )
 
             # Add to queue
@@ -870,10 +821,6 @@ class HospitalSimulation:
             print(
                 f"✅ Patient {patient.name} checked in and added to queue"
             )
-            print(
-                f"   Reception interaction: {check_in_result[:100]}..."
-            )
-            print(f"   Patient response: {patient_response[:100]}...")
         else:
             print(
                 f"⚠️ Receptionist busy, patient {patient.name} waiting"
@@ -902,14 +849,10 @@ class HospitalSimulation:
             available_nurse.assign_patient(patient)
             patient.status = PatientStatus.IN_TRIAGE
 
-            # Nurse performs triage
-            triage_prompt = "You are performing triage assessment. Greet the patient, take their vital signs, assess their symptoms, and determine their priority level."
-            triage_result = available_nurse.agent.run(triage_prompt)
-
-            # Patient responds to triage
-            patient_triage_response = patient.agent.run(
-                f"You are being assessed by a triage nurse. The nurse is taking your vital signs and asking about your symptoms. "
-                f"Respond to their questions and describe how you're feeling: {triage_result}"
+            triage_result = available_nurse.agent.run(
+                f"Perform triage for patient: {patient.name}, "
+                f"Chief Complaint: {patient.chief_complaint}, "
+                f"Symptoms: {', '.join(patient.symptoms)}"
             )
 
             # Update patient with triage information
@@ -933,40 +876,27 @@ class HospitalSimulation:
                 history_context = f"\n\nPATIENT HISTORY:\n{patient_history[0]['content']}"
 
             # Doctor consultation
-            doctor_prompt = (
-                f"You are consulting with a patient. Review their triage results and medical history if available. "
+            consultation_result = available_doctor.agent.run(
+                f"Consult with patient: {patient.name}, Age: {patient.age}, "
+                f"Chief Complaint: {patient.chief_complaint}, "
+                f"Symptoms: {', '.join(patient.symptoms)}, "
                 f"Vital Signs: {json.dumps(patient.vital_signs, indent=2)}"
                 f"{history_context}\n\n"
-                f"Greet the patient, ask relevant questions about their condition, perform examination, "
-                f"and work towards a diagnosis and treatment plan."
-            )
-            consultation_result = available_doctor.agent.run(
-                doctor_prompt
-            )
-
-            # Patient responds to doctor
-            patient_consultation_response = patient.agent.run(
-                f"You are now with the doctor for your consultation. The doctor is examining you and asking questions. "
-                f"Answer their questions honestly and describe your symptoms in detail: {consultation_result}"
-            )
-
-            # Doctor processes patient responses and finalizes diagnosis
-            final_consultation = available_doctor.agent.run(
-                f"Based on the patient's responses and your examination, provide your final diagnosis and treatment plan. "
-                f"Patient responses: {patient_consultation_response}"
+                f"Please provide a comprehensive diagnosis and treatment plan. "
+                f"Ask relevant questions to understand the patient's condition better."
             )
 
             # Extract diagnosis and treatment plan
             diagnosis, treatment_plan = (
                 self._extract_diagnosis_and_treatment(
-                    final_consultation
+                    consultation_result
                 )
             )
             patient.diagnosis = diagnosis
             patient.treatment_plan = treatment_plan
 
             # Save to EHR
-            medical_notes = f"TRIAGE: {triage_result}\n\nPATIENT TRIAGE RESPONSE: {patient_triage_response}\n\nCONSULTATION: {consultation_result}\n\nPATIENT CONSULTATION RESPONSE: {patient_consultation_response}\n\nFINAL DIAGNOSIS: {final_consultation}"
+            medical_notes = f"TRIAGE: {triage_result}\n\nCONSULTATION: {consultation_result}"
             self.ehr_system.add_patient_record(
                 patient, medical_notes, available_doctor.name
             )
@@ -1147,7 +1077,6 @@ class HospitalSimulation:
                 medical_history=["hypertension", "diabetes"],
                 current_medications=["metformin", "lisinopril"],
                 allergies=["penicillin"],
-                system_prompt="You are John Smith, a 45-year-old man experiencing chest pain. You're worried this might be a heart attack because you have a history of high blood pressure and diabetes. You're sweating and feeling anxious. Be cooperative with medical staff but express your concerns about your heart.",
             ),
             Patient(
                 name="Sarah Johnson",
@@ -1158,7 +1087,6 @@ class HospitalSimulation:
                 medical_history=["migraines"],
                 current_medications=["sumatriptan"],
                 allergies=[],
-                system_prompt="You are Sarah Johnson, a 32-year-old woman with a severe migraine. You have a history of migraines but this one feels different and more intense. The light is bothering you and you feel nauseous. You're hoping to get something stronger for the pain.",
             ),
             Patient(
                 name="Michael Brown",
@@ -1169,7 +1097,6 @@ class HospitalSimulation:
                 medical_history=["asthma"],
                 current_medications=["albuterol inhaler"],
                 allergies=["sulfa drugs"],
-                system_prompt="You are Michael Brown, a 58-year-old man with flu-like symptoms. You have asthma and you're concerned about your breathing. You've been coughing a lot and feel very tired. You want to make sure it's not something serious affecting your lungs.",
             ),
             Patient(
                 name="Emily Davis",
@@ -1180,7 +1107,6 @@ class HospitalSimulation:
                 medical_history=["appendicitis"],
                 current_medications=[],
                 allergies=[],
-                system_prompt="You are Emily Davis, a 28-year-old woman with severe abdominal pain. You had your appendix removed before, so you're worried about what could be causing this pain. You've been vomiting and the pain is getting worse.",
             ),
             Patient(
                 name="Robert Wilson",
@@ -1191,7 +1117,6 @@ class HospitalSimulation:
                 medical_history=["hypertension", "heart disease"],
                 current_medications=["atenolol", "aspirin"],
                 allergies=["codeine"],
-                system_prompt="You are Robert Wilson, a 67-year-old man feeling dizzy and confused. You have heart problems and high blood pressure, so you're worried this might be related. You feel weak and unsteady. Your family brought you in because they're concerned.",
             ),
         ]
 
@@ -1329,18 +1254,13 @@ class HospitalSimulation:
 
         receptionist.assign_patient(patient)
 
-        # Receptionist greets and checks in patient
-        check_in_prompt = "Greet the patient and process their check-in. Ask for their information and explain the process."
-        check_in_result = receptionist.agent.run(check_in_prompt)
-
-        # Patient responds to receptionist
-        patient_check_in_response = patient.agent.run(
-            f"You are at the hospital reception desk for check-in. The receptionist is greeting you and asking for information. "
-            f"Respond appropriately: {check_in_result}"
+        check_in_result = receptionist.agent.run(
+            f"Process check-in for patient: {patient.name}, Age: {patient.age}, "
+            f"Chief Complaint: {patient.chief_complaint}, Symptoms: {', '.join(patient.symptoms)}"
         )
 
         receptionist.release_patient()
-        return f"RECEPTION: {check_in_result}\n\nPATIENT: {patient_check_in_response}"
+        return check_in_result
 
     def _triage_assessment(self, patient: Patient) -> str:
         """Perform triage assessment with nurse."""
@@ -1361,14 +1281,10 @@ class HospitalSimulation:
         available_nurse.assign_patient(patient)
         patient.status = PatientStatus.IN_TRIAGE
 
-        # Nurse performs triage
-        triage_prompt = "You are performing triage assessment. Greet the patient, take their vital signs, assess their symptoms, and determine their priority level."
-        triage_result = available_nurse.agent.run(triage_prompt)
-
-        # Patient responds to triage
-        patient_triage_response = patient.agent.run(
-            f"You are being assessed by a triage nurse. The nurse is taking your vital signs and asking about your symptoms. "
-            f"Respond to their questions and describe how you're feeling: {triage_result}"
+        triage_result = available_nurse.agent.run(
+            f"Perform triage for patient: {patient.name}, "
+            f"Chief Complaint: {patient.chief_complaint}, "
+            f"Symptoms: {', '.join(patient.symptoms)}"
         )
 
         # Update patient with triage information
@@ -1377,7 +1293,7 @@ class HospitalSimulation:
         patient.assigned_nurse = available_nurse.name
 
         available_nurse.release_patient()
-        return f"TRIAGE: {triage_result}\n\nPATIENT: {patient_triage_response}"
+        return triage_result
 
     def _doctor_consultation(self, patient: Patient) -> str:
         """Perform doctor consultation."""
@@ -1408,38 +1324,25 @@ class HospitalSimulation:
             history_context = f"\n\nPATIENT HISTORY:\n{patient_history[0]['content']}"
 
         # Doctor consultation
-        doctor_prompt = (
-            f"You are consulting with a patient. Review their triage results and medical history if available. "
+        consultation_result = available_doctor.agent.run(
+            f"Consult with patient: {patient.name}, Age: {patient.age}, "
+            f"Chief Complaint: {patient.chief_complaint}, "
+            f"Symptoms: {', '.join(patient.symptoms)}, "
             f"Vital Signs: {json.dumps(patient.vital_signs, indent=2)}"
             f"{history_context}\n\n"
-            f"Greet the patient, ask relevant questions about their condition, perform examination, "
-            f"and work towards a diagnosis and treatment plan."
-        )
-        consultation_result = available_doctor.agent.run(
-            doctor_prompt
-        )
-
-        # Patient responds to doctor
-        patient_consultation_response = patient.agent.run(
-            f"You are now with the doctor for your consultation. The doctor is examining you and asking questions. "
-            f"Answer their questions honestly and describe your symptoms in detail: {consultation_result}"
-        )
-
-        # Doctor processes patient responses and finalizes diagnosis
-        final_consultation = available_doctor.agent.run(
-            f"Based on the patient's responses and your examination, provide your final diagnosis and treatment plan. "
-            f"Patient responses: {patient_consultation_response}"
+            f"Please provide a comprehensive diagnosis and treatment plan. "
+            f"Ask relevant questions to understand the patient's condition better."
         )
 
         # Extract diagnosis and treatment plan
         diagnosis, treatment_plan = (
-            self._extract_diagnosis_and_treatment(final_consultation)
+            self._extract_diagnosis_and_treatment(consultation_result)
         )
         patient.diagnosis = diagnosis
         patient.treatment_plan = treatment_plan
 
         available_doctor.release_patient()
-        return f"CONSULTATION: {consultation_result}\n\nPATIENT: {patient_consultation_response}\n\nFINAL: {final_consultation}"
+        return consultation_result
 
     def _treatment_planning(self, patient: Patient) -> str:
         """Create comprehensive treatment plan."""
@@ -1616,3 +1519,28 @@ class HospitalSimulation:
             print(
                 f"\nEHR System: In-memory storage with {len(self.ehr_system.memory_storage)} records"
             )
+
+
+def main():
+    """Main function to run the hospital simulation."""
+    print("🏥 Hospital Simulation System")
+    print("=" * 40)
+
+    # Create hospital simulation
+    hospital = HospitalSimulation("General Hospital")
+
+    # Generate initial patients
+    print("\n📋 Generating initial patients...")
+    hospital.generate_patients(5)
+
+    # Run simulation
+    print("\n🚀 Starting simulation...")
+    hospital.run_simulation(
+        duration_minutes=30, patient_arrival_rate=0.2
+    )
+
+    print("\n✅ Simulation completed!")
+
+
+if __name__ == "__main__":
+    main()

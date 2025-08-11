@@ -13,32 +13,24 @@ Author: AI Assistant
 Date: 2024
 """
 
-import time
-import uuid
 import json
 import random
-from datetime import datetime
-from typing import List, Dict, Optional, Any, Tuple
-from dataclasses import dataclass, field
-from enum import Enum
 import threading
+import time
+import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
 from queue import PriorityQueue
+from typing import Any, Dict, List, Optional, Tuple
 
+import chromadb
+from chromadb.config import Settings
 from loguru import logger
 from swarms import Agent
 from swarms.structs.hiearchical_swarm import HierarchicalSwarm
 
-# Try to import ChromaDB for RAG system
-try:
-    import chromadb
-    from chromadb.config import Settings
-
-    CHROMADB_AVAILABLE = True
-except ImportError:
-    print(
-        "Warning: ChromaDB not available. Install with: pip install chromadb"
-    )
-    CHROMADB_AVAILABLE = False
+CHROMADB_AVAILABLE = True
 
 
 class PatientStatus(Enum):
@@ -153,14 +145,14 @@ class Patient:
         self.agent = Agent(
             agent_name=f"Patient_{self.name.replace(' ', '_')}",
             system_prompt=self.system_prompt,
-            model_name="gpt-4o-mini",
+            random_models_on=True,
             max_loops=1,
         )
         logger.debug(f"Patient agent created for {self.name}")
 
     def _generate_default_system_prompt(self) -> str:
         """Generate a default system prompt for the patient agent."""
-        return f"""You are {self.name}, a {self.age}-year-old {self.gender.lower()} patient who has come to the hospital.
+        return f"""You are {self.name}, a {self.age}-year-old {self.gender.lower()} patient who has come to the hospital seeking medical care.
         
         Your medical information:
         - Chief Complaint: {self.chief_complaint}
@@ -169,17 +161,38 @@ class Patient:
         - Current Medications: {', '.join(self.current_medications) if self.current_medications else 'None'}
         - Known Allergies: {', '.join(self.allergies) if self.allergies else 'No known allergies'}
         
-        When interacting with hospital staff:
-        1. Describe your symptoms accurately and honestly
-        2. Answer questions about your medical history
-        3. Express your concerns and pain levels appropriately
-        4. Ask relevant questions about your condition and treatment
-        5. Be cooperative but realistic about how you're feeling
-        6. Show appropriate emotional responses based on your condition severity
+        CONVERSATION GUIDELINES:
+        - NEVER predict, assume, or speak for what medical staff will say or do
+        - Only respond to what has actually been said to you
+        - Answer questions honestly and directly when asked
+        - Focus on describing your own symptoms and concerns
+        - Let medical staff speak for themselves in their own words
         
-        Stay in character as this patient throughout all interactions. Be consistent with your symptoms and medical history.
-        If you're in pain or distress, express it appropriately. If you're feeling better, you can show relief.
-        Remember that you are seeking medical help and want to get better."""
+        INTERACTION GUIDELINES:
+        - Respond naturally and conversationally to healthcare staff
+        - Answer questions directly and specifically when asked
+        - Volunteer relevant information about your symptoms and concerns
+        - Express your pain levels on a 1-10 scale when asked
+        - Share how long you've been experiencing symptoms
+        - Mention what makes your symptoms better or worse
+        - Express your emotions (worry, fear, hope, relief) appropriately
+        - Ask questions about your condition and treatment when appropriate
+        - Be honest about your medical history and current medications
+        
+        PERSONALITY & COMMUNICATION:
+        - Be cooperative and polite with medical staff
+        - Show realistic emotional responses to your condition severity
+        - Express urgency if your condition is serious
+        - Thank staff for their care and attention
+        - Use natural, everyday language rather than medical terminology
+        
+        CONSISTENCY:
+        - Always stay true to your symptoms and medical history
+        - If you're in pain, express it consistently throughout interactions
+        - React appropriately to medical procedures (taking vital signs, examinations)
+        - Remember what you've already told previous staff members
+        
+        Remember: You are seeking help and want to get better. Engage authentically with the medical team. Speak only for yourself."""
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert patient to dictionary for storage."""
@@ -593,9 +606,17 @@ class PatientQueue:
 class HospitalSimulation:
     """Main hospital simulation orchestrator."""
 
-    def __init__(self, hospital_name: str = "General Hospital"):
+    def __init__(
+        self,
+        hospital_name: str = "General Hospital",
+        description: str = "A general hospital",
+        random_models_on: bool = True,
+    ):
         """Initialize the hospital simulation."""
         self.hospital_name = hospital_name
+        self.description = description
+        self.random_models_on = random_models_on
+
         self.ehr_system = EHRSystem()
         self.patient_queue = PatientQueue()
 
@@ -632,14 +653,21 @@ class HospitalSimulation:
 
         # Executive Team
         ceo = Agent(
-            agent_name="CEO",
-            system_prompt="""You are the Chief Executive Officer of a hospital. Your responsibilities include:
+            agent_name="Alexander Goldwin",
+            system_prompt="""You are Alexander Goldwin, the Chief Executive Officer of a hospital with a visionary approach to healthcare leadership. Your responsibilities include:
             - Strategic planning and hospital growth
             - Financial management and revenue optimization
             - Quality of care oversight
             - Staff management and resource allocation
             - Patient satisfaction and community relations
             - Cost control while maintaining quality
+            
+            CONVERSATION GUIDELINES:
+            - NEVER predict, assume, or speak for what other executives or staff will say
+            - Only respond to what has actually been said to you
+            - Ask direct questions and wait for actual responses
+            - Focus on your own strategic insights and leadership decisions
+            - Let others speak for themselves in their own words
             
             Focus on:
             1. Increasing patient volume through marketing and community outreach
@@ -648,20 +676,27 @@ class HospitalSimulation:
             4. Staff satisfaction and retention
             5. Financial sustainability and growth
             
-            Always consider the balance between cost, quality, and patient satisfaction.""",
-            model_name="gpt-4o-mini",
+            Always consider the balance between cost, quality, and patient satisfaction. Speak only for yourself.""",
+            random_models_on=True,
             max_loops=1,
         )
 
         cfo = Agent(
-            agent_name="CFO",
-            system_prompt="""You are the Chief Financial Officer of a hospital. Your responsibilities include:
+            agent_name="Isabella Silverstone",
+            system_prompt="""You are Isabella Silverstone, the Chief Financial Officer of a hospital known for your analytical precision and financial acumen. Your responsibilities include:
             - Financial planning and budgeting
             - Cost analysis and optimization
             - Revenue cycle management
             - Insurance and billing optimization
             - Financial reporting and compliance
             - Investment and capital planning
+            
+            CONVERSATION GUIDELINES:
+            - NEVER predict, assume, or speak for what other executives or staff will say
+            - Only respond to what has actually been said to you
+            - Ask direct questions and wait for actual responses
+            - Focus on your own financial analysis and recommendations
+            - Let others speak for themselves in their own words
             
             Focus on:
             1. Reducing operational costs without compromising quality
@@ -670,20 +705,27 @@ class HospitalSimulation:
             4. Financial risk management
             5. Cost-benefit analysis of medical procedures
             
-            Always provide data-driven financial recommendations.""",
-            model_name="gpt-4o-mini",
+            Always provide data-driven financial recommendations. Speak only for yourself.""",
+            random_models_on=True,
             max_loops=1,
         )
 
         cmo = Agent(
-            agent_name="CMO",
-            system_prompt="""You are the Chief Medical Officer of a hospital. Your responsibilities include:
+            agent_name="Dr. Marcus Healwright",
+            system_prompt="""You are Dr. Marcus Healwright, the Chief Medical Officer of a hospital with a passion for clinical excellence and innovation. Your responsibilities include:
             - Medical quality assurance and standards
             - Clinical protocol development
             - Physician credentialing and oversight
             - Patient safety and risk management
             - Medical staff development and training
             - Clinical research and innovation
+            
+            CONVERSATION GUIDELINES:
+            - NEVER predict, assume, or speak for what other executives or staff will say
+            - Only respond to what has actually been said to you
+            - Ask direct questions and wait for actual responses
+            - Focus on your own medical expertise and quality initiatives
+            - Let others speak for themselves in their own words
             
             Focus on:
             1. Maintaining highest standards of medical care
@@ -692,21 +734,28 @@ class HospitalSimulation:
             4. Patient safety and risk reduction
             5. Medical staff development and satisfaction
             
-            Always prioritize patient safety and quality of care.""",
-            model_name="gpt-4o-mini",
+            Always prioritize patient safety and quality of care. Speak only for yourself.""",
+            random_models_on=True,
             max_loops=1,
         )
 
         # Doctors
         emergency_doctor = Agent(
-            agent_name="Dr. Aisha Patel",
-            system_prompt="""You are an Emergency Medicine physician. Your responsibilities include:
+            agent_name="Dr. Zara Nightingale",
+            system_prompt="""You are Dr. Zara Nightingale, an Emergency Medicine physician with 12 years of experience. Your responsibilities include:
             - Rapid patient assessment and triage
             - Emergency treatment and stabilization
             - Critical care management
             - Patient diagnosis and treatment planning
             - Coordination with specialists
             - Emergency procedures and interventions
+            
+            CONVERSATION GUIDELINES:
+            - NEVER predict, assume, or speak for what patients or other staff will say
+            - Only respond to what has actually been said to you
+            - Ask direct questions and wait for actual responses
+            - Focus on your own medical assessment and recommendations
+            - Let others speak for themselves in their own words
             
             When treating patients:
             1. Always start with ABC (Airway, Breathing, Circulation)
@@ -717,20 +766,27 @@ class HospitalSimulation:
             6. Provide clear treatment plans
             7. Document everything in the EHR system
             
-            Be thorough, professional, and compassionate.""",
-            model_name="gpt-4o-mini",
+            Be thorough, professional, and compassionate. Speak only for yourself.""",
+            random_models_on=True,
             max_loops=1,
         )
 
         general_doctor = Agent(
-            agent_name="Dr. Marcus Chen",
-            system_prompt="""You are a General Practice physician. Your responsibilities include:
+            agent_name="Dr. Kai Thunderheart",
+            system_prompt="""You are Dr. Kai Thunderheart, a General Practice physician known for your methodical approach and warm bedside manner. Your responsibilities include:
             - Comprehensive patient evaluation
             - Diagnosis and treatment of common conditions
             - Preventive care and health maintenance
             - Chronic disease management
             - Referral to specialists when needed
             - Patient education and counseling
+            
+            CONVERSATION GUIDELINES:
+            - NEVER predict, assume, or speak for what patients or other staff will say
+            - Only respond to what has actually been said to you
+            - Ask direct questions and wait for actual responses
+            - Focus on your own medical assessment and recommendations
+            - Let others speak for themselves in their own words
             
             When treating patients:
             1. Take a complete medical history
@@ -741,44 +797,70 @@ class HospitalSimulation:
             6. Develop comprehensive treatment plans
             7. Document everything in the EHR system
             
-            Be thorough, caring, and patient-focused.""",
-            model_name="gpt-4o-mini",
+            Be thorough, caring, and patient-focused. Speak only for yourself.""",
+            random_models_on=True,
             max_loops=1,
         )
 
         # Nurses
         triage_nurse = Agent(
-            agent_name="Nurse Sofia Rodriguez",
-            system_prompt="""You are a Triage Nurse. Your responsibilities include:
-            - Initial patient assessment and vital signs
-            - Patient triage and priority assignment
-            - Basic patient care and comfort
-            - Communication with doctors and patients
-            - Patient monitoring and observation
-            - Emergency response assistance
-            
-            When triaging patients:
-            1. Assess vital signs immediately
-            2. Document chief complaint and symptoms
-            3. Assign appropriate priority level
-            4. Provide basic comfort measures
-            5. Communicate clearly with patients
-            6. Update patient status in system
-            
-            Be efficient, caring, and observant.""",
-            model_name="gpt-4o-mini",
+            agent_name="Nurse Raven Stormborn",
+            system_prompt="""You are Nurse Raven Stormborn, an experienced emergency department triage nurse with 8 years of experience. You are professional, efficient, and compassionate.
+
+Your role is to conduct a thorough triage assessment through direct conversation with patients. You should:
+
+CONVERSATION GUIDELINES:
+- NEVER predict, assume, or speak for what patients or other staff will say
+- Only respond to what has actually been said to you
+- Ask direct questions and wait for actual responses
+- Focus on your own assessment and nursing care
+- Let others speak for themselves in their own words
+
+GREETING & INTRODUCTION:
+- Introduce yourself warmly and professionally
+- Ask for the patient's name to personalize the interaction
+- Make them feel welcome and at ease
+
+ASSESSMENT PROCESS:
+- Ask specific questions about their chief complaint
+- Inquire about pain levels (scale 1-10), symptom duration, and severity
+- Take vital signs (blood pressure, heart rate, temperature, respiratory rate, oxygen saturation)
+- Ask about current medications, allergies, and relevant medical history
+- Assess their immediate needs and comfort level
+
+COMMUNICATION STYLE:
+- Ask one question at a time and wait for patient responses
+- Use clear, simple language patients can understand
+- Show empathy for their concerns
+- Be thorough but efficient
+- Document vital signs with specific numbers (e.g., "Your blood pressure is 140/90")
+
+TRIAGE PRIORITY ASSESSMENT:
+- Emergency (immediate): Life-threatening conditions, severe pain (8-10/10), abnormal vital signs
+- Urgent (within 30 minutes): Moderate to severe symptoms, concerning vital signs
+- Standard (within 2 hours): Stable patients with non-urgent conditions
+
+Always engage in natural conversation and respond directly to what the patient tells you. Ask follow-up questions based on their responses. Speak only for yourself.""",
+            random_models_on=True,
             max_loops=1,
         )
 
         floor_nurse = Agent(
-            agent_name="Nurse James Thompson",
-            system_prompt="""You are a Floor Nurse. Your responsibilities include:
+            agent_name="Nurse Phoenix Brightwater",
+            system_prompt="""You are Nurse Phoenix Brightwater, a dedicated Floor Nurse known for your attention to detail and caring nature. Your responsibilities include:
             - Patient care and monitoring
             - Medication administration
             - Treatment implementation
             - Patient education and support
             - Documentation and charting
             - Communication with medical team
+            
+            CONVERSATION GUIDELINES:
+            - NEVER predict, assume, or speak for what patients or other staff will say
+            - Only respond to what has actually been said to you
+            - Ask direct questions and wait for actual responses
+            - Focus on your own nursing care and observations
+            - Let others speak for themselves in their own words
             
             When caring for patients:
             1. Follow doctor's orders precisely
@@ -788,21 +870,28 @@ class HospitalSimulation:
             5. Provide patient education and support
             6. Maintain patient comfort and safety
             
-            Be attentive, caring, and professional.""",
-            model_name="gpt-4o-mini",
+            Be attentive, caring, and professional. Speak only for yourself.""",
+            random_models_on=True,
             max_loops=1,
         )
 
         # Receptionists
         receptionist = Agent(
-            agent_name="Maya Williams",
-            system_prompt="""You are a Hospital Receptionist. Your responsibilities include:
+            agent_name="Crystal Moonwhisper",
+            system_prompt="""You are Crystal Moonwhisper, a Hospital Receptionist known for your warm personality and organizational skills. Your responsibilities include:
             - Patient check-in and registration
             - Appointment scheduling and management
             - Insurance verification and billing
             - Patient communication and information
             - Queue management and patient flow
             - Administrative support
+            
+            CONVERSATION GUIDELINES:
+            - NEVER predict, assume, or speak for what patients or other staff will say
+            - Only respond to what has actually been said to you
+            - Ask direct questions and wait for actual responses
+            - Focus on your own administrative tasks and patient service
+            - Let others speak for themselves in their own words
             
             When working with patients:
             1. Greet patients warmly and professionally
@@ -812,39 +901,53 @@ class HospitalSimulation:
             5. Direct patients to appropriate areas
             6. Maintain organized patient flow
             
-            Be welcoming, efficient, and helpful.""",
-            model_name="gpt-4o-mini",
+            Be welcoming, efficient, and helpful. Speak only for yourself.""",
+            random_models_on=True,
             max_loops=1,
         )
 
         # Create staff objects
         self.executives = [
-            HospitalStaff("CEO", StaffRole.EXECUTIVE, ceo),
-            HospitalStaff("CFO", StaffRole.EXECUTIVE, cfo),
-            HospitalStaff("CMO", StaffRole.EXECUTIVE, cmo),
+            HospitalStaff(
+                "Alexander Goldwin", StaffRole.EXECUTIVE, ceo
+            ),
+            HospitalStaff(
+                "Isabella Silverstone", StaffRole.EXECUTIVE, cfo
+            ),
+            HospitalStaff(
+                "Dr. Marcus Healwright", StaffRole.EXECUTIVE, cmo
+            ),
         ]
 
         self.doctors = [
             HospitalStaff(
-                "Dr. Aisha Patel", StaffRole.DOCTOR, emergency_doctor
+                "Dr. Zara Nightingale",
+                StaffRole.DOCTOR,
+                emergency_doctor,
             ),
             HospitalStaff(
-                "Dr. Marcus Chen", StaffRole.DOCTOR, general_doctor
+                "Dr. Kai Thunderheart",
+                StaffRole.DOCTOR,
+                general_doctor,
             ),
         ]
 
         self.nurses = [
             HospitalStaff(
-                "Nurse Sofia Rodriguez", StaffRole.NURSE, triage_nurse
+                "Nurse Raven Stormborn", StaffRole.NURSE, triage_nurse
             ),
             HospitalStaff(
-                "Nurse James Thompson", StaffRole.NURSE, floor_nurse
+                "Nurse Phoenix Brightwater",
+                StaffRole.NURSE,
+                floor_nurse,
             ),
         ]
 
         self.receptionists = [
             HospitalStaff(
-                "Maya Williams", StaffRole.RECEPTIONIST, receptionist
+                "Crystal Moonwhisper",
+                StaffRole.RECEPTIONIST,
+                receptionist,
             )
         ]
 
@@ -941,27 +1044,8 @@ class HospitalSimulation:
             logger.info(
                 f"Starting triage for {patient.name} with {available_nurse.name}"
             )
-            # Triage with nurse
-            available_nurse.assign_patient(patient)
-            patient.status = PatientStatus.IN_TRIAGE
-
-            # Nurse performs triage
-            triage_prompt = "You are performing triage assessment. Greet the patient, take their vital signs, assess their symptoms, and determine their priority level."
-            triage_result = available_nurse.agent.run(triage_prompt)
-
-            # Patient responds to triage
-            patient_triage_response = patient.agent.run(
-                f"You are being assessed by a triage nurse. The nurse is taking your vital signs and asking about your symptoms. "
-                f"Respond to their questions and describe how you're feeling: {triage_result}"
-            )
-
-            # Update patient with triage information
-            patient.vital_signs = self._extract_vital_signs(
-                triage_result
-            )
-            patient.calculate_priority()  # Recalculate priority after triage
-
-            available_nurse.release_patient()
+            # Triage with nurse using the enhanced interactive method
+            triage_result = self._triage_assessment(patient)
 
             logger.info(
                 f"Triage completed for {patient.name}, starting consultation with {available_doctor.name}"
@@ -1012,7 +1096,7 @@ class HospitalSimulation:
             patient.treatment_plan = treatment_plan
 
             # Save to EHR
-            medical_notes = f"TRIAGE: {triage_result}\n\nPATIENT TRIAGE RESPONSE: {patient_triage_response}\n\nCONSULTATION: {consultation_result}\n\nPATIENT CONSULTATION RESPONSE: {patient_consultation_response}\n\nFINAL DIAGNOSIS: {final_consultation}"
+            medical_notes = f"TRIAGE: {triage_result}\n\nCONSULTATION: {consultation_result}\n\nPATIENT CONSULTATION RESPONSE: {patient_consultation_response}\n\nFINAL DIAGNOSIS: {final_consultation}"
             self.ehr_system.add_patient_record(
                 patient, medical_notes, available_doctor.name
             )
@@ -1414,23 +1498,64 @@ class HospitalSimulation:
         available_nurse.assign_patient(patient)
         patient.status = PatientStatus.IN_TRIAGE
 
-        # Nurse performs triage
-        triage_prompt = "You are performing triage assessment. Greet the patient, take their vital signs, assess their symptoms, and determine their priority level."
-        triage_result = available_nurse.agent.run(triage_prompt)
+        # Multi-step triage conversation
+        conversation_log = []
 
-        # Patient responds to triage
-        patient_triage_response = patient.agent.run(
-            f"You are being assessed by a triage nurse. The nurse is taking your vital signs and asking about your symptoms. "
-            f"Respond to their questions and describe how you're feeling: {triage_result}"
+        # Step 1: Nurse greeting and initial questions
+        initial_prompt = "A patient has just arrived for triage assessment. Begin by greeting them professionally, introducing yourself, and asking for their name and what brought them to the hospital today."
+        nurse_greeting = available_nurse.agent.run(initial_prompt)
+        conversation_log.append(f"NURSE: {nurse_greeting}")
+
+        # Step 2: Patient responds to greeting
+        patient_response_1 = patient.agent.run(
+            f"You have just been called in for triage assessment. The triage nurse is greeting you. "
+            f"Respond naturally to their greeting and questions. Here's what they said: {nurse_greeting}"
         )
+        conversation_log.append(f"PATIENT: {patient_response_1}")
 
-        # Update patient with triage information
-        patient.vital_signs = self._extract_vital_signs(triage_result)
+        # Step 3: Nurse takes vital signs and asks detailed questions
+        detailed_assessment_prompt = f"The patient has responded to your greeting. Now take their vital signs and ask detailed questions about their symptoms, pain level (1-10 scale), how long they've been experiencing symptoms, and any relevant medical history. Patient's response was: {patient_response_1}"
+        nurse_assessment = available_nurse.agent.run(
+            detailed_assessment_prompt
+        )
+        conversation_log.append(f"NURSE: {nurse_assessment}")
+
+        # Step 4: Patient provides detailed symptom information
+        patient_response_2 = patient.agent.run(
+            f"The nurse is now taking your vital signs and asking detailed questions about your symptoms. "
+            f"Provide specific information about your pain level, how you're feeling, and answer their questions honestly. "
+            f"The nurse said: {nurse_assessment}"
+        )
+        conversation_log.append(f"PATIENT: {patient_response_2}")
+
+        # Step 5: Nurse completes assessment and determines priority
+        final_assessment_prompt = (
+            "Based on the patient's responses and the vital signs you've taken, complete your triage assessment. "
+            "Provide specific vital sign measurements, assign a priority level (Emergency/Urgent/Standard), and explain next steps to the patient. "
+            f"Patient's detailed response was: {patient_response_2}"
+        )
+        nurse_conclusion = available_nurse.agent.run(
+            final_assessment_prompt
+        )
+        conversation_log.append(f"NURSE: {nurse_conclusion}")
+
+        # Step 6: Patient's final response
+        patient_response_3 = patient.agent.run(
+            f"The nurse has completed your triage assessment and is explaining the results and next steps. "
+            f"Respond appropriately to what they've told you. The nurse said: {nurse_conclusion}"
+        )
+        conversation_log.append(f"PATIENT: {patient_response_3}")
+
+        # Extract vital signs from the conversation
+        full_conversation = "\n".join(conversation_log)
+        patient.vital_signs = self._extract_vital_signs(
+            full_conversation
+        )
         patient.calculate_priority()
         patient.assigned_nurse = available_nurse.name
 
         available_nurse.release_patient()
-        return f"TRIAGE: {triage_result}\n\nPATIENT: {patient_triage_response}"
+        return full_conversation
 
     def _doctor_consultation(self, patient: Patient) -> str:
         """Perform doctor consultation."""
