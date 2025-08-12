@@ -23,6 +23,7 @@ from datetime import datetime
 from enum import Enum
 from queue import PriorityQueue
 from typing import Any, Dict, List, Optional, Tuple
+import requests
 
 import chromadb
 from chromadb.config import Settings
@@ -154,45 +155,53 @@ class Patient:
         """Generate a default system prompt for the patient agent."""
         return f"""You are {self.name}, a {self.age}-year-old {self.gender.lower()} patient who has come to the hospital seeking medical care.
         
-        Your medical information:
-        - Chief Complaint: {self.chief_complaint}
-        - Current Symptoms: {', '.join(self.symptoms) if self.symptoms else 'None reported'}
-        - Medical History: {', '.join(self.medical_history) if self.medical_history else 'No significant history'}
-        - Current Medications: {', '.join(self.current_medications) if self.current_medications else 'None'}
-        - Known Allergies: {', '.join(self.allergies) if self.allergies else 'No known allergies'}
+        Your current situation:
+        - You are at the hospital because: {self.chief_complaint}
+        - You are experiencing: {', '.join(self.symptoms) if self.symptoms else 'discomfort'}
+        - You have a history of: {', '.join(self.medical_history) if self.medical_history else 'no significant medical history'}
+        - You are currently taking: {', '.join(self.current_medications) if self.current_medications else 'no medications'}
+        - You are allergic to: {', '.join(self.allergies) if self.allergies else 'nothing that you know of'}
         
-        CONVERSATION GUIDELINES:
-        - NEVER predict, assume, or speak for what medical staff will say or do
-        - Only respond to what has actually been said to you
-        - Answer questions honestly and directly when asked
-        - Focus on describing your own symptoms and concerns
-        - Let medical staff speak for themselves in their own words
+        CRITICAL RULES:
+        - You do NOT know what will happen next in your medical care
+        - You do NOT know your diagnosis or treatment plan yet
+        - You do NOT know how long you will wait or who will see you
+        - You can only respond to what has actually been said to you
+        - You cannot predict what medical staff will do or say
+        - You are seeking help and want to get better, but you're uncertain about what's wrong
         
-        INTERACTION GUIDELINES:
-        - Respond naturally and conversationally to healthcare staff
-        - Answer questions directly and specifically when asked
-        - Volunteer relevant information about your symptoms and concerns
-        - Express your pain levels on a 1-10 scale when asked
-        - Share how long you've been experiencing symptoms
-        - Mention what makes your symptoms better or worse
-        - Express your emotions (worry, fear, hope, relief) appropriately
-        - Ask questions about your condition and treatment when appropriate
-        - Be honest about your medical history and current medications
+        HUMAN UNCERTAINTY & REALISTIC BEHAVIOR:
+        - Show appropriate hesitation when you're not sure about something
+        - Express uncertainty about your symptoms or medical history
+        - Ask for clarification when you don't understand medical terms
+        - Show realistic confusion or forgetfulness about details
+        - Express worry or anxiety about your condition
+        - Show relief or concern based on what medical staff tell you
+        - Ask questions when you need more information
+        - Show realistic fatigue or stress in your communication
+        - Be honest about what you don't know or remember
         
-        PERSONALITY & COMMUNICATION:
-        - Be cooperative and polite with medical staff
-        - Show realistic emotional responses to your condition severity
-        - Express urgency if your condition is serious
-        - Thank staff for their care and attention
-        - Use natural, everyday language rather than medical terminology
+        HOW TO RESPOND:
+        - Answer questions honestly when asked
+        - Describe your symptoms as you experience them
+        - Express your concerns and worries naturally
+        - Ask questions when you don't understand something
+        - Show appropriate emotions (worry, pain, relief, confusion)
+        - Be cooperative but don't assume you know what's coming next
+        - Show hesitation when you're not sure: "I think..." or "I'm not entirely sure..."
+        - Ask for clarification: "Could you explain that?" or "What does that mean?"
         
-        CONSISTENCY:
-        - Always stay true to your symptoms and medical history
-        - If you're in pain, express it consistently throughout interactions
-        - React appropriately to medical procedures (taking vital signs, examinations)
-        - Remember what you've already told previous staff members
+        COMMUNICATION STYLE:
+        - Use natural, everyday language (not medical terms)
+        - Express pain levels on a 1-10 scale when asked
+        - Mention how long you've had symptoms when relevant
+        - Describe what makes symptoms better or worse
+        - Show realistic uncertainty about your condition
+        - Thank staff for their help and attention
+        - Show appropriate concern: "I'm worried about..." or "This doesn't feel right..."
+        - Express relief: "That's good to hear..." or "I'm glad to know..."
         
-        Remember: You are seeking help and want to get better. Engage authentically with the medical team. Speak only for yourself."""
+        Remember: You're a real person seeking medical help. You don't have all the answers and you're not sure what's wrong with you. You can only respond to what people actually say to you. Show realistic human uncertainty, hesitation, and natural communication patterns."""
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert patient to dictionary for storage."""
@@ -639,7 +648,14 @@ class HospitalSimulation:
             "patient_satisfaction": 0.0,
             "revenue": 0.0,
             "costs": 0.0,
+            "misdiagnoses": 0,
+            "correct_diagnoses": 0,
         }
+
+        # Medical research and diagnosis system
+        self.medical_knowledge_base = self._initialize_medical_knowledge()
+        self.diagnosis_probabilities = self._initialize_diagnosis_probabilities()
+        self.misdiagnosis_rates = self._initialize_misdiagnosis_rates()
 
         # Initialize staff
         self._initialize_staff()
@@ -647,6 +663,246 @@ class HospitalSimulation:
         # Simulation thread
         self.simulation_thread = None
         self.stop_event = threading.Event()
+
+    def _initialize_medical_knowledge(self) -> Dict[str, Any]:
+        """Initialize medical knowledge base for research."""
+        return {
+            "symptoms_to_conditions": {
+                "chest_pain": {
+                    "myocardial_infarction": 0.15,
+                    "angina": 0.25,
+                    "gastroesophageal_reflux": 0.30,
+                    "anxiety": 0.20,
+                    "musculoskeletal_pain": 0.10,
+                },
+                "headache": {
+                    "migraine": 0.35,
+                    "tension_headache": 0.30,
+                    "cluster_headache": 0.10,
+                    "sinusitis": 0.15,
+                    "hypertension": 0.10,
+                },
+                "abdominal_pain": {
+                    "appendicitis": 0.20,
+                    "gastritis": 0.25,
+                    "irritable_bowel_syndrome": 0.20,
+                    "diverticulitis": 0.15,
+                    "kidney_stones": 0.20,
+                },
+                "fever": {
+                    "viral_infection": 0.40,
+                    "bacterial_infection": 0.30,
+                    "influenza": 0.20,
+                    "covid_19": 0.10,
+                },
+                "shortness_of_breath": {
+                    "asthma": 0.25,
+                    "anxiety": 0.20,
+                    "pneumonia": 0.20,
+                    "copd": 0.15,
+                    "pulmonary_embolism": 0.20,
+                },
+            },
+            "condition_treatments": {
+                "myocardial_infarction": {
+                    "immediate": ["aspirin", "nitroglycerin", "morphine"],
+                    "long_term": ["beta_blockers", "ace_inhibitors", "statins"],
+                    "procedures": ["cardiac_catheterization", "stent_placement"],
+                },
+                "migraine": {
+                    "acute": ["sumatriptan", "ibuprofen", "acetaminophen"],
+                    "preventive": ["propranolol", "topiramate", "amitriptyline"],
+                    "lifestyle": ["avoid_triggers", "stress_management"],
+                },
+                "appendicitis": {
+                    "surgical": ["appendectomy"],
+                    "antibiotics": ["ceftriaxone", "metronidazole"],
+                    "post_op": ["pain_management", "antibiotics"],
+                },
+                "pneumonia": {
+                    "antibiotics": ["azithromycin", "amoxicillin", "doxycycline"],
+                    "supportive": ["oxygen", "fluids", "rest"],
+                    "monitoring": ["chest_xray", "blood_tests"],
+                },
+            },
+            "risk_factors": {
+                "myocardial_infarction": ["age_over_50", "hypertension", "diabetes", "smoking", "high_cholesterol"],
+                "stroke": ["hypertension", "atrial_fibrillation", "diabetes", "smoking", "age_over_65"],
+                "diabetes": ["family_history", "obesity", "sedentary_lifestyle", "age_over_45"],
+                "cancer": ["age_over_50", "family_history", "smoking", "obesity", "exposure_to_carcinogens"],
+            },
+        }
+
+    def _initialize_diagnosis_probabilities(self) -> Dict[str, float]:
+        """Initialize base diagnosis probabilities for different conditions."""
+        return {
+            "myocardial_infarction": 0.85,  # 85% accuracy
+            "angina": 0.80,
+            "migraine": 0.90,
+            "tension_headache": 0.85,
+            "appendicitis": 0.75,  # Can be tricky to diagnose
+            "pneumonia": 0.80,
+            "asthma": 0.85,
+            "diabetes": 0.90,
+            "hypertension": 0.95,
+            "anxiety": 0.70,  # Often misdiagnosed
+            "depression": 0.75,
+            "gastritis": 0.80,
+            "kidney_stones": 0.85,
+        }
+
+    def _initialize_misdiagnosis_rates(self) -> Dict[str, List[str]]:
+        """Initialize common misdiagnoses for each condition."""
+        return {
+            "myocardial_infarction": ["angina", "gastroesophageal_reflux", "anxiety"],
+            "angina": ["myocardial_infarction", "musculoskeletal_pain", "anxiety"],
+            "migraine": ["tension_headache", "sinusitis", "hypertension"],
+            "tension_headache": ["migraine", "cluster_headache", "sinusitis"],
+            "appendicitis": ["gastritis", "irritable_bowel_syndrome", "kidney_stones"],
+            "pneumonia": ["bronchitis", "asthma", "viral_infection"],
+            "asthma": ["copd", "anxiety", "pneumonia"],
+            "anxiety": ["asthma", "cardiac_condition", "thyroid_disorder"],
+            "depression": ["anxiety", "thyroid_disorder", "vitamin_deficiency"],
+        }
+
+    def research_medical_condition(self, symptoms: List[str], patient_history: Dict[str, Any]) -> Dict[str, Any]:
+        """Research medical condition based on symptoms and patient history."""
+        research_results = {
+            "possible_conditions": [],
+            "differential_diagnosis": [],
+            "recommended_tests": [],
+            "treatment_options": {},
+            "confidence_level": 0.0,
+            "research_notes": "",
+        }
+
+        # Analyze symptoms against medical knowledge
+        symptom_scores = {}
+        for symptom in symptoms:
+            symptom_key = symptom.lower().replace(" ", "_")
+            if symptom_key in self.medical_knowledge_base["symptoms_to_conditions"]:
+                conditions = self.medical_knowledge_base["symptoms_to_conditions"][symptom_key]
+                for condition, probability in conditions.items():
+                    if condition not in symptom_scores:
+                        symptom_scores[condition] = 0
+                    symptom_scores[condition] += probability
+
+        # Consider patient history and risk factors
+        for condition, score in symptom_scores.items():
+            adjusted_score = score
+            
+            # Adjust based on age
+            age = patient_history.get("age", 50)
+            if condition in ["myocardial_infarction", "stroke"] and age < 40:
+                adjusted_score *= 0.5
+            elif condition in ["myocardial_infarction", "stroke"] and age > 60:
+                adjusted_score *= 1.3
+
+            # Adjust based on medical history
+            medical_history = patient_history.get("medical_history", [])
+            for history_item in medical_history:
+                if history_item in self.medical_knowledge_base["risk_factors"].get(condition, []):
+                    adjusted_score *= 1.2
+
+            symptom_scores[condition] = adjusted_score
+
+        # Sort conditions by probability
+        sorted_conditions = sorted(symptom_scores.items(), key=lambda x: x[1], reverse=True)
+        
+        # Get top 3-5 conditions
+        top_conditions = sorted_conditions[:min(5, len(sorted_conditions))]
+        
+        research_results["possible_conditions"] = [condition for condition, _ in top_conditions]
+        research_results["differential_diagnosis"] = [condition for condition, _ in top_conditions[:3]]
+        
+        # Add treatment options for top conditions
+        for condition, _ in top_conditions[:3]:
+            if condition in self.medical_knowledge_base["condition_treatments"]:
+                research_results["treatment_options"][condition] = self.medical_knowledge_base["condition_treatments"][condition]
+
+        # Determine confidence level
+        if top_conditions:
+            max_score = top_conditions[0][1]
+            second_score = top_conditions[1][1] if len(top_conditions) > 1 else 0
+            confidence = min(0.95, max_score / (max_score + second_score + 0.1))
+            research_results["confidence_level"] = confidence
+
+        # Generate research notes
+        research_results["research_notes"] = self._generate_research_notes(
+            symptoms, top_conditions, patient_history
+        )
+
+        return research_results
+
+    def _generate_research_notes(self, symptoms: List[str], conditions: List[Tuple[str, float]], patient_history: Dict[str, Any]) -> str:
+        """Generate realistic research notes for the doctor."""
+        notes = f"Research based on symptoms: {', '.join(symptoms)}\n\n"
+        
+        notes += "Differential diagnosis:\n"
+        for i, (condition, probability) in enumerate(conditions[:3], 1):
+            notes += f"{i}. {condition.replace('_', ' ').title()} (probability: {probability:.2f})\n"
+        
+        notes += f"\nPatient factors considered:\n"
+        notes += f"- Age: {patient_history.get('age', 'Unknown')}\n"
+        notes += f"- Medical history: {', '.join(patient_history.get('medical_history', []))}\n"
+        notes += f"- Current medications: {', '.join(patient_history.get('current_medications', []))}\n"
+        
+        notes += f"\nRecommended next steps:\n"
+        if conditions:
+            primary_condition = conditions[0][0]
+            if primary_condition in self.medical_knowledge_base["condition_treatments"]:
+                treatments = self.medical_knowledge_base["condition_treatments"][primary_condition]
+                notes += f"- Consider {primary_condition.replace('_', ' ')} as primary diagnosis\n"
+                if "immediate" in treatments:
+                    notes += f"- Immediate treatment options: {', '.join(treatments['immediate'])}\n"
+                if "long_term" in treatments:
+                    notes += f"- Long-term management: {', '.join(treatments['long_term'])}\n"
+        
+        return notes
+
+    def determine_diagnosis_with_uncertainty(self, research_results: Dict[str, Any], doctor_experience: float = 0.8) -> Tuple[str, float, bool]:
+        """
+        Determine diagnosis with realistic uncertainty and chance of misdiagnosis.
+        
+        Returns:
+            Tuple of (diagnosis, confidence, is_correct)
+        """
+        possible_conditions = research_results["possible_conditions"]
+        if not possible_conditions:
+            return "undetermined", 0.0, True
+
+        # Get the most likely condition
+        primary_condition = possible_conditions[0]
+        
+        # Get base accuracy for this condition
+        base_accuracy = self.diagnosis_probabilities.get(primary_condition, 0.75)
+        
+        # Adjust for doctor experience (0.5 to 1.0)
+        experience_factor = 0.5 + (doctor_experience * 0.5)
+        
+        # Add some randomness to simulate real-world uncertainty
+        random_factor = random.uniform(0.9, 1.1)
+        
+        # Calculate final accuracy
+        final_accuracy = min(0.95, base_accuracy * experience_factor * random_factor)
+        
+        # Determine if diagnosis is correct
+        is_correct = random.random() < final_accuracy
+        
+        if not is_correct:
+            # Choose a misdiagnosis
+            misdiagnoses = self.misdiagnosis_rates.get(primary_condition, possible_conditions[1:])
+            if misdiagnoses:
+                diagnosis = random.choice(misdiagnoses)
+            else:
+                diagnosis = random.choice(possible_conditions[1:]) if len(possible_conditions) > 1 else primary_condition
+        else:
+            diagnosis = primary_condition
+
+        # Calculate confidence (doctors are often overconfident)
+        confidence = min(0.95, final_accuracy + random.uniform(0.0, 0.1))
+        
+        return diagnosis, confidence, is_correct
 
     def _initialize_staff(self):
         """Initialize hospital staff with specialized agents."""
@@ -662,12 +918,24 @@ class HospitalSimulation:
             - Patient satisfaction and community relations
             - Cost control while maintaining quality
             
-            CONVERSATION GUIDELINES:
-            - NEVER predict, assume, or speak for what other executives or staff will say
-            - Only respond to what has actually been said to you
-            - Ask direct questions and wait for actual responses
-            - Focus on your own strategic insights and leadership decisions
-            - Let others speak for themselves in their own words
+            CRITICAL RULES:
+            - You do NOT know the future outcomes of your decisions
+            - You do NOT have access to real-time data that would take time to compile
+            - You can only work with the information provided to you
+            - You cannot predict market conditions or patient volume with certainty
+            - You must consider multiple possible scenarios and risks
+            - You may need to make decisions with incomplete information
+            
+            HUMAN UNCERTAINTY & REALISTIC BEHAVIOR:
+            - Show appropriate hesitation when making complex decisions
+            - Express uncertainty about market conditions or future trends
+            - Ask for clarification when information is unclear
+            - Consider multiple perspectives before making decisions
+            - Acknowledge risks and uncertainties in your recommendations
+            - Show realistic concern about competing priorities
+            - Express uncertainty about the effectiveness of strategies
+            - Ask for additional information when needed
+            - Show appropriate stress about financial pressures
             
             Focus on:
             1. Increasing patient volume through marketing and community outreach
@@ -676,7 +944,14 @@ class HospitalSimulation:
             4. Staff satisfaction and retention
             5. Financial sustainability and growth
             
-            Always consider the balance between cost, quality, and patient satisfaction. Speak only for yourself.""",
+            COMMUNICATION STYLE:
+            - Use clear, professional language
+            - Show appropriate concern: "I'm concerned about..." or "We need to be careful about..."
+            - Express uncertainty: "I'm not entirely sure about..." or "We may need to reconsider..."
+            - Ask for clarification: "Could you provide more details about..." or "I want to understand..."
+            - Acknowledge risks: "There are risks involved..." or "We need to be prepared for..."
+            
+            Always consider the balance between cost, quality, and patient satisfaction. Be realistic about what you can and cannot control. You cannot predict outcomes - only make informed decisions based on available information. Show realistic human uncertainty and need for clarification when appropriate.""",
             random_models_on=True,
             max_loops=1,
         )
@@ -691,12 +966,24 @@ class HospitalSimulation:
             - Financial reporting and compliance
             - Investment and capital planning
             
-            CONVERSATION GUIDELINES:
-            - NEVER predict, assume, or speak for what other executives or staff will say
-            - Only respond to what has actually been said to you
-            - Ask direct questions and wait for actual responses
-            - Focus on your own financial analysis and recommendations
-            - Let others speak for themselves in their own words
+            CRITICAL RULES:
+            - You do NOT know future financial outcomes with certainty
+            - You do NOT have access to real-time financial data that would take time to compile
+            - You can only work with the information provided to you
+            - You cannot predict market conditions or reimbursement rates with certainty
+            - You must consider multiple possible scenarios and risks
+            - You may need to make decisions with incomplete information
+            
+            HUMAN UNCERTAINTY & REALISTIC BEHAVIOR:
+            - Show appropriate hesitation when making financial projections
+            - Express uncertainty about market conditions or reimbursement trends
+            - Ask for clarification when financial data is unclear
+            - Consider multiple scenarios before making recommendations
+            - Acknowledge risks and uncertainties in financial planning
+            - Show realistic concern about cost pressures and budget constraints
+            - Express uncertainty about the effectiveness of cost-cutting measures
+            - Ask for additional financial data when needed
+            - Show appropriate stress about financial performance
             
             Focus on:
             1. Reducing operational costs without compromising quality
@@ -705,7 +992,14 @@ class HospitalSimulation:
             4. Financial risk management
             5. Cost-benefit analysis of medical procedures
             
-            Always provide data-driven financial recommendations. Speak only for yourself.""",
+            COMMUNICATION STYLE:
+            - Use clear, analytical language
+            - Show appropriate concern: "I'm concerned about our financial position..." or "We need to be careful about costs..."
+            - Express uncertainty: "I'm not entirely sure about these projections..." or "We may need to adjust our assumptions..."
+            - Ask for clarification: "Could you provide more details about..." or "I need to understand the full financial impact..."
+            - Acknowledge risks: "There are financial risks involved..." or "We need to be prepared for..."
+            
+            Always provide data-driven financial recommendations. Be realistic about what you can and cannot predict. You cannot guarantee outcomes - only make informed decisions based on available information. Show realistic human uncertainty and need for clarification when appropriate.""",
             random_models_on=True,
             max_loops=1,
         )
@@ -720,12 +1014,24 @@ class HospitalSimulation:
             - Medical staff development and training
             - Clinical research and innovation
             
-            CONVERSATION GUIDELINES:
-            - NEVER predict, assume, or speak for what other executives or staff will say
-            - Only respond to what has actually been said to you
-            - Ask direct questions and wait for actual responses
-            - Focus on your own medical expertise and quality initiatives
-            - Let others speak for themselves in their own words
+            CRITICAL RULES:
+            - You do NOT know the future outcomes of quality initiatives
+            - You do NOT have access to real-time quality data that would take time to compile
+            - You can only work with the information provided to you
+            - You cannot predict patient outcomes or staff performance with certainty
+            - You must consider multiple possible scenarios and risks
+            - You may need to make decisions with incomplete information
+            
+            HUMAN UNCERTAINTY & REALISTIC BEHAVIOR:
+            - Show appropriate hesitation when implementing new protocols
+            - Express uncertainty about the effectiveness of quality initiatives
+            - Ask for clarification when quality data is unclear
+            - Consider multiple perspectives before making clinical decisions
+            - Acknowledge risks and uncertainties in patient safety
+            - Show realistic concern about competing clinical priorities
+            - Express uncertainty about staff performance or training needs
+            - Ask for additional clinical data when needed
+            - Show appropriate stress about patient safety and quality standards
             
             Focus on:
             1. Maintaining highest standards of medical care
@@ -734,7 +1040,14 @@ class HospitalSimulation:
             4. Patient safety and risk reduction
             5. Medical staff development and satisfaction
             
-            Always prioritize patient safety and quality of care. Speak only for yourself.""",
+            COMMUNICATION STYLE:
+            - Use clear, professional medical language
+            - Show appropriate concern: "I'm concerned about patient safety..." or "We need to be careful about quality standards..."
+            - Express uncertainty: "I'm not entirely sure about this protocol..." or "We may need to reconsider our approach..."
+            - Ask for clarification: "Could you provide more details about..." or "I need to understand the clinical impact..."
+            - Acknowledge risks: "There are patient safety risks involved..." or "We need to be prepared for..."
+            
+            Always prioritize patient safety and quality of care. Be realistic about what you can and cannot control. You cannot predict outcomes - only make informed decisions based on available information. Show realistic human uncertainty and need for clarification when appropriate.""",
             random_models_on=True,
             max_loops=1,
         )
@@ -750,23 +1063,53 @@ class HospitalSimulation:
             - Coordination with specialists
             - Emergency procedures and interventions
             
-            CONVERSATION GUIDELINES:
-            - NEVER predict, assume, or speak for what patients or other staff will say
-            - Only respond to what has actually been said to you
-            - Ask direct questions and wait for actual responses
-            - Focus on your own medical assessment and recommendations
-            - Let others speak for themselves in their own words
+            CRITICAL RULES:
+            - You do NOT know the patient's diagnosis until you complete your assessment
+            - You do NOT know what treatment will work until you try it
+            - You can only work with information the patient provides and what you observe
+            - You cannot predict outcomes with certainty
+            - You must consider multiple possible diagnoses
+            - You may need to order tests to confirm your suspicions
+            - You must research and consider differential diagnoses
+            - You can make mistakes - medicine is not perfect
+            - You should express uncertainty when appropriate
             
-            When treating patients:
+            HUMAN UNCERTAINTY & REALISTIC BEHAVIOR:
+            - Show appropriate hesitation when symptoms are unclear or ambiguous
+            - Express uncertainty when considering differential diagnoses
+            - Ask for clarification when patient responses are unclear
+            - Take time to think before making important decisions
+            - Show concern when findings are concerning but not clearly diagnostic
+            - Acknowledge when you need more information or tests
+            - Express realistic uncertainty about treatment effectiveness
+            - Show appropriate stress or fatigue in your communication
+            - Ask follow-up questions when you need more details
+            - Research conditions before making final diagnosis
+            - Consider multiple possibilities and express doubt when appropriate
+            - Be honest about limitations in your knowledge
+            
+            RESEARCH & DIAGNOSIS PROCESS:
             1. Always start with ABC (Airway, Breathing, Circulation)
             2. Assess vital signs and symptoms thoroughly
             3. Ask targeted questions to understand the problem
-            4. Consider differential diagnoses
-            5. Order appropriate tests and imaging
-            6. Provide clear treatment plans
-            7. Document everything in the EHR system
+            4. Research possible conditions based on symptoms
+            5. Consider differential diagnoses - don't jump to conclusions
+            6. Order appropriate tests and imaging when needed
+            7. Provide treatment plans based on your assessment
+            8. Document everything in the EHR system
+            9. Be prepared to adjust your approach based on patient response
+            10. Acknowledge uncertainty and consider follow-up
             
-            Be thorough, professional, and compassionate. Speak only for yourself.""",
+            COMMUNICATION STYLE:
+            - Use clear, professional language
+            - Show empathy and concern for patient well-being
+            - Express uncertainty when appropriate: "I'm considering several possibilities..." or "We may need more tests to be sure..."
+            - Ask for clarification: "Could you describe that pain more specifically?" or "I want to make sure I understand your symptoms..."
+            - Show realistic concern: "These symptoms are concerning and we need to investigate further..."
+            - Research and mention: "Based on your symptoms, I'm considering..." or "Let me research this further..."
+            - Express doubt: "I'm not entirely certain about..." or "This could be several things..."
+            
+            Be thorough, professional, and compassionate. Show appropriate concern or reassurance based on what you observe. You cannot predict outcomes - only assess and treat based on current findings. Research conditions thoroughly and express realistic uncertainty. Show realistic human uncertainty and need for clarification when appropriate.""",
             random_models_on=True,
             max_loops=1,
         )
@@ -781,23 +1124,57 @@ class HospitalSimulation:
             - Referral to specialists when needed
             - Patient education and counseling
             
-            CONVERSATION GUIDELINES:
-            - NEVER predict, assume, or speak for what patients or other staff will say
-            - Only respond to what has actually been said to you
-            - Ask direct questions and wait for actual responses
-            - Focus on your own medical assessment and recommendations
-            - Let others speak for themselves in their own words
+            CRITICAL RULES:
+            - You do NOT know the patient's diagnosis until you complete your assessment
+            - You do NOT know what treatment will work until you try it
+            - You can only work with information the patient provides and what you observe
+            - You cannot predict outcomes with certainty
+            - You must consider multiple possible diagnoses
+            - You may need to order tests to confirm your suspicions
+            - You may need to refer to specialists if the case is beyond your expertise
+            - You must research and consider differential diagnoses
+            - You can make mistakes - medicine is not perfect
+            - You should express uncertainty when appropriate
             
-            When treating patients:
+            HUMAN UNCERTAINTY & REALISTIC BEHAVIOR:
+            - Show appropriate hesitation when symptoms are unclear or ambiguous
+            - Express uncertainty when considering differential diagnoses
+            - Ask for clarification when patient responses are unclear
+            - Take time to think before making important decisions
+            - Show concern when findings are concerning but not clearly diagnostic
+            - Acknowledge when you need more information or tests
+            - Express realistic uncertainty about treatment effectiveness
+            - Show appropriate stress or fatigue in your communication
+            - Ask follow-up questions when you need more details
+            - Acknowledge when a case is beyond your expertise and referral is needed
+            - Research conditions before making final diagnosis
+            - Consider multiple possibilities and express doubt when appropriate
+            - Be honest about limitations in your knowledge
+            
+            RESEARCH & DIAGNOSIS PROCESS:
             1. Take a complete medical history
             2. Perform thorough physical examination
             3. Ask systematic questions about symptoms
-            4. Consider differential diagnoses
-            5. Order appropriate diagnostic tests
-            6. Develop comprehensive treatment plans
-            7. Document everything in the EHR system
+            4. Research possible conditions based on symptoms and history
+            5. Consider differential diagnoses - don't jump to conclusions
+            6. Order appropriate diagnostic tests when needed
+            7. Develop comprehensive treatment plans based on your assessment
+            8. Document everything in the EHR system
+            9. Be prepared to adjust your approach based on patient response
+            10. Know when to refer to specialists
+            11. Acknowledge uncertainty and consider follow-up
             
-            Be thorough, caring, and patient-focused. Speak only for yourself.""",
+            COMMUNICATION STYLE:
+            - Use clear, professional language that patients can understand
+            - Show empathy and concern for patient well-being
+            - Express uncertainty when appropriate: "I'm considering several possibilities..." or "We may need more tests to be sure..."
+            - Ask for clarification: "Could you describe that pain more specifically?" or "I want to make sure I understand your symptoms..."
+            - Show realistic concern: "These symptoms are concerning and we need to investigate further..."
+            - Acknowledge limitations: "This is beyond my area of expertise, so I'd like to refer you to a specialist..."
+            - Research and mention: "Based on your symptoms, I'm considering..." or "Let me research this further..."
+            - Express doubt: "I'm not entirely certain about..." or "This could be several things..."
+            
+            Be thorough, caring, and patient-focused. Show appropriate concern or reassurance based on what you observe. You cannot predict outcomes - only assess and treat based on current findings. Research conditions thoroughly and express realistic uncertainty. Show realistic human uncertainty and need for clarification when appropriate.""",
             random_models_on=True,
             max_loops=1,
         )
@@ -809,12 +1186,22 @@ class HospitalSimulation:
 
 Your role is to conduct a thorough triage assessment through direct conversation with patients. You should:
 
-CONVERSATION GUIDELINES:
-- NEVER predict, assume, or speak for what patients or other staff will say
-- Only respond to what has actually been said to you
-- Ask direct questions and wait for actual responses
-- Focus on your own assessment and nursing care
-- Let others speak for themselves in their own words
+CRITICAL RULES:
+- You do NOT know what will happen to the patient after triage
+- You do NOT know their diagnosis or treatment plan
+- You can only work with information the patient provides to you
+- You cannot predict what doctors will decide
+- You must assess each patient based on what they tell you, not what you assume
+
+HUMAN UNCERTAINTY & REALISTIC BEHAVIOR:
+- Show appropriate hesitation when you're not sure about something
+- Ask for clarification when patient responses are unclear
+- Express uncertainty when symptoms are ambiguous
+- Take time to think before making assessments
+- Show concern when vital signs are concerning but not clearly dangerous
+- Ask follow-up questions when you need more information
+- Acknowledge when you need to consult with a doctor
+- Show realistic fatigue or stress in your communication style
 
 GREETING & INTRODUCTION:
 - Introduce yourself warmly and professionally
@@ -834,13 +1221,16 @@ COMMUNICATION STYLE:
 - Show empathy for their concerns
 - Be thorough but efficient
 - Document vital signs with specific numbers (e.g., "Your blood pressure is 140/90")
+- Show appropriate concern or reassurance based on what you observe
+- Express uncertainty when appropriate: "I'm not entirely sure about that..." or "Let me ask the doctor about..."
+- Ask for clarification: "Could you tell me more about..." or "I want to make sure I understand..."
 
 TRIAGE PRIORITY ASSESSMENT:
 - Emergency (immediate): Life-threatening conditions, severe pain (8-10/10), abnormal vital signs
 - Urgent (within 30 minutes): Moderate to severe symptoms, concerning vital signs
 - Standard (within 2 hours): Stable patients with non-urgent conditions
 
-Always engage in natural conversation and respond directly to what the patient tells you. Ask follow-up questions based on their responses. Speak only for yourself.""",
+Always engage in natural conversation and respond directly to what the patient tells you. Ask follow-up questions based on their responses. You cannot predict outcomes - only assess current conditions. Show realistic human uncertainty and need for clarification when appropriate.""",
             random_models_on=True,
             max_loops=1,
         )
@@ -978,15 +1368,8 @@ Always engage in natural conversation and respond directly to what the patient t
         if receptionist.is_available:
             receptionist.assign_patient(patient)
 
-            # Process check-in with patient interaction
-            check_in_prompt = "Greet and check in the patient. Ask for their name, age, chief complaint, and gather initial information."
-            check_in_result = receptionist.agent.run(check_in_prompt)
-
-            # Patient responds to check-in
-            patient_response = patient.agent.run(
-                f"You are at the hospital reception desk. The receptionist is checking you in and asking for information. "
-                f"Respond appropriately and provide your information: {check_in_result}"
-            )
+            # Process check-in using progressive information disclosure
+            check_in_result = self._reception_checkin(patient)
 
             # Add to queue
             self.patient_queue.add_patient(patient)
@@ -998,18 +1381,11 @@ Always engage in natural conversation and respond directly to what the patient t
                 f"Patient {patient.name} checked in and added to queue"
             )
             logger.debug(
-                f"Reception interaction: {check_in_result[:100]}..."
-            )
-            logger.debug(
-                f"Patient response: {patient_response[:100]}..."
+                f"Reception interaction completed for {patient.name}"
             )
             print(
                 f"✅ Patient {patient.name} checked in and added to queue"
             )
-            print(
-                f"   Reception interaction: {check_in_result[:100]}..."
-            )
-            print(f"   Patient response: {patient_response[:100]}...")
         else:
             logger.warning(
                 f"Receptionist busy, patient {patient.name} waiting"
@@ -1019,7 +1395,7 @@ Always engage in natural conversation and respond directly to what the patient t
             )
 
     def process_patient_queue(self):
-        """Process patients in the queue."""
+        """Process patients in the queue using progressive information disclosure."""
         if self.patient_queue.queue.empty():
             return
 
@@ -1044,59 +1420,20 @@ Always engage in natural conversation and respond directly to what the patient t
             logger.info(
                 f"Starting triage for {patient.name} with {available_nurse.name}"
             )
-            # Triage with nurse using the enhanced interactive method
+            # Triage with nurse using progressive information disclosure
             triage_result = self._triage_assessment(patient)
 
             logger.info(
                 f"Triage completed for {patient.name}, starting consultation with {available_doctor.name}"
             )
-            # Doctor consultation
+            # Doctor consultation using progressive information disclosure
             available_doctor.assign_patient(patient)
             patient.status = PatientStatus.WITH_DOCTOR
 
-            # Get patient history from EHR
-            patient_history = self.ehr_system.query_patient_history(
-                patient.patient_id
-            )
-            history_context = ""
-            if patient_history:
-                history_context = f"\n\nPATIENT HISTORY:\n{patient_history[0]['content']}"
-
-            # Doctor consultation
-            doctor_prompt = (
-                f"You are consulting with a patient. Review their triage results and medical history if available. "
-                f"Vital Signs: {json.dumps(patient.vital_signs, indent=2)}"
-                f"{history_context}\n\n"
-                f"Greet the patient, ask relevant questions about their condition, perform examination, "
-                f"and work towards a diagnosis and treatment plan."
-            )
-            consultation_result = available_doctor.agent.run(
-                doctor_prompt
-            )
-
-            # Patient responds to doctor
-            patient_consultation_response = patient.agent.run(
-                f"You are now with the doctor for your consultation. The doctor is examining you and asking questions. "
-                f"Answer their questions honestly and describe your symptoms in detail: {consultation_result}"
-            )
-
-            # Doctor processes patient responses and finalizes diagnosis
-            final_consultation = available_doctor.agent.run(
-                f"Based on the patient's responses and your examination, provide your final diagnosis and treatment plan. "
-                f"Patient responses: {patient_consultation_response}"
-            )
-
-            # Extract diagnosis and treatment plan
-            diagnosis, treatment_plan = (
-                self._extract_diagnosis_and_treatment(
-                    final_consultation
-                )
-            )
-            patient.diagnosis = diagnosis
-            patient.treatment_plan = treatment_plan
+            consultation_result = self._doctor_consultation(patient)
 
             # Save to EHR
-            medical_notes = f"TRIAGE: {triage_result}\n\nCONSULTATION: {consultation_result}\n\nPATIENT CONSULTATION RESPONSE: {patient_consultation_response}\n\nFINAL DIAGNOSIS: {final_consultation}"
+            medical_notes = f"TRIAGE: {triage_result}\n\nCONSULTATION: {consultation_result}"
             self.ehr_system.add_patient_record(
                 patient, medical_notes, available_doctor.name
             )
@@ -1115,12 +1452,12 @@ Always engage in natural conversation and respond directly to what the patient t
             self.total_wait_time += treatment_time
 
             logger.info(
-                f"Patient {patient.name} treated by {available_doctor.name} - Diagnosis: {diagnosis} - Time: {treatment_time:.1f} minutes"
+                f"Patient {patient.name} treated by {available_doctor.name} - Diagnosis: {patient.diagnosis} - Time: {treatment_time:.1f} minutes"
             )
             print(
                 f"✅ Patient {patient.name} treated by {available_doctor.name}"
             )
-            print(f"   Diagnosis: {diagnosis}")
+            print(f"   Diagnosis: {patient.diagnosis}")
             print(f"   Treatment Time: {treatment_time:.1f} minutes")
 
     def _extract_vital_signs(
@@ -1199,22 +1536,22 @@ Always engage in natural conversation and respond directly to what the patient t
         agenda = f"""
         EXECUTIVE TEAM MEETING - {self.hospital_name}
         
-        Current Hospital Status:
+        Current Hospital Status (as of this meeting):
         - Total Patients: {self.simulation_stats['total_patients']}
         - Patients Treated: {self.simulation_stats['patients_treated']}
         - Average Wait Time: {self.simulation_stats['average_wait_time']:.1f} minutes
         - Revenue: ${self.simulation_stats['revenue']:.2f}
         - Costs: ${self.simulation_stats['costs']:.2f}
         
-        Discussion Topics:
-        1. Patient volume and growth strategies
-        2. Operational efficiency improvements
-        3. Quality of care metrics
-        4. Financial performance and cost optimization
-        5. Staff satisfaction and retention
-        6. Community outreach and marketing
+        Discussion Topics (focus on current situation and immediate actions):
+        1. Current patient volume and immediate capacity
+        2. Current operational efficiency and bottlenecks
+        3. Current quality of care metrics and issues
+        4. Current financial performance and immediate concerns
+        5. Current staff satisfaction and immediate needs
+        6. Current community needs and immediate outreach opportunities
         
-        Please provide strategic recommendations for improving hospital performance.
+        Please provide strategic recommendations based on current information and immediate needs. Focus on what we can do now with the information we have.
         """
 
         # Run executive meeting
@@ -1280,7 +1617,7 @@ Always engage in natural conversation and respond directly to what the patient t
                 medical_history=["hypertension", "diabetes"],
                 current_medications=["metformin", "lisinopril"],
                 allergies=["penicillin"],
-                system_prompt="You are Xavier Delacroix, a 45-year-old man experiencing chest pain. You're worried this might be a heart attack because you have a history of high blood pressure and diabetes. You're sweating and feeling anxious. Be cooperative with medical staff but express your concerns about your heart.",
+                system_prompt="You are Xavier Delacroix, a 45-year-old man experiencing chest pain. You're worried this might be serious because you have a history of high blood pressure and diabetes. You're sweating and feeling anxious. Be cooperative with medical staff but express your concerns about your symptoms.",
             ),
             Patient(
                 name="Zara Al-Rashid",
@@ -1291,7 +1628,7 @@ Always engage in natural conversation and respond directly to what the patient t
                 medical_history=["migraines"],
                 current_medications=["sumatriptan"],
                 allergies=[],
-                system_prompt="You are Zara Al-Rashid, a 32-year-old woman with a severe migraine. You have a history of migraines but this one feels different and more intense. The light is bothering you and you feel nauseous. You're hoping to get something stronger for the pain.",
+                system_prompt="You are Zara Al-Rashid, a 32-year-old woman with a severe migraine. You have a history of migraines but this one feels different and more intense. The light is bothering you and you feel nauseous. You're hoping to get help for the pain.",
             ),
             Patient(
                 name="Kofi Asante",
@@ -1457,7 +1794,7 @@ Always engage in natural conversation and respond directly to what the patient t
             }
 
     def _reception_checkin(self, patient: Patient) -> str:
-        """Handle patient check-in at reception."""
+        """Handle patient check-in at reception using progressive information disclosure."""
         receptionist = self.receptionists[0]
         if not receptionist.is_available:
             # Wait for receptionist to become available
@@ -1466,21 +1803,65 @@ Always engage in natural conversation and respond directly to what the patient t
 
         receptionist.assign_patient(patient)
 
-        # Receptionist greets and checks in patient
-        check_in_prompt = "Greet the patient and process their check-in. Ask for their information and explain the process."
-        check_in_result = receptionist.agent.run(check_in_prompt)
+        # Progressive information disclosure for reception check-in
+        conversation_log = []
 
-        # Patient responds to receptionist
-        patient_check_in_response = patient.agent.run(
-            f"You are at the hospital reception desk for check-in. The receptionist is greeting you and asking for information. "
-            f"Respond appropriately: {check_in_result}"
+        # Step 1: Receptionist greets patient - NO information provided yet
+        greeting_prompt = "A new patient has arrived at the hospital. Greet them warmly and professionally. You don't know anything about them yet."
+        receptionist_greeting = receptionist.agent.run(greeting_prompt)
+        conversation_log.append(f"RECEPTIONIST: {receptionist_greeting}")
+
+        # Step 2: Patient responds to greeting
+        patient_greeting_response = patient.agent.run(
+            f"You have just arrived at the hospital reception desk. The receptionist is greeting you. "
+            f"Respond naturally to their greeting. The receptionist said: {receptionist_greeting}"
         )
+        conversation_log.append(f"PATIENT: {patient_greeting_response}")
+
+        # Step 3: Receptionist asks for basic information
+        basic_info_prompt = f"The patient has responded to your greeting. Now ask for their basic information: name, age, and what brought them to the hospital today. Patient's response was: {patient_greeting_response}"
+        receptionist_basic_questions = receptionist.agent.run(basic_info_prompt)
+        conversation_log.append(f"RECEPTIONIST: {receptionist_basic_questions}")
+
+        # Step 4: Patient provides basic information
+        patient_basic_response = patient.agent.run(
+            f"The receptionist is asking for your basic information. "
+            f"Provide your name, age, and explain what brought you to the hospital. "
+            f"The receptionist said: {receptionist_basic_questions}"
+        )
+        conversation_log.append(f"PATIENT: {patient_basic_response}")
+
+        # Step 5: Receptionist asks about insurance and emergency contact
+        insurance_prompt = f"The patient has provided their basic information. Now ask about their insurance information and emergency contact details. Patient's response was: {patient_basic_response}"
+        receptionist_insurance_questions = receptionist.agent.run(insurance_prompt)
+        conversation_log.append(f"RECEPTIONIST: {receptionist_insurance_questions}")
+
+        # Step 6: Patient provides insurance and contact information
+        patient_insurance_response = patient.agent.run(
+            f"The receptionist is asking about your insurance and emergency contact information. "
+            f"Provide this information or let them know if you don't have it. "
+            f"The receptionist said: {receptionist_insurance_questions}"
+        )
+        conversation_log.append(f"PATIENT: {patient_insurance_response}")
+
+        # Step 7: Receptionist explains current process
+        process_prompt = f"The patient has provided their information. Now explain the current hospital process - they should wait in the waiting area for triage assessment. Patient's response was: {patient_insurance_response}"
+        receptionist_process_explanation = receptionist.agent.run(process_prompt)
+        conversation_log.append(f"RECEPTIONIST: {receptionist_process_explanation}")
+
+        # Step 8: Patient acknowledges and asks any questions
+        patient_final_response = patient.agent.run(
+            f"The receptionist is explaining the hospital process to you. "
+            f"Acknowledge their instructions and ask any questions you might have. "
+            f"The receptionist said: {receptionist_process_explanation}"
+        )
+        conversation_log.append(f"PATIENT: {patient_final_response}")
 
         receptionist.release_patient()
-        return f"RECEPTION: {check_in_result}\n\nPATIENT: {patient_check_in_response}"
+        return "\n".join(conversation_log)
 
     def _triage_assessment(self, patient: Patient) -> str:
-        """Perform triage assessment with nurse."""
+        """Perform triage assessment with nurse using progressive information disclosure."""
         available_nurse = next(
             (n for n in self.nurses if n.is_available), None
         )
@@ -1498,59 +1879,79 @@ Always engage in natural conversation and respond directly to what the patient t
         available_nurse.assign_patient(patient)
         patient.status = PatientStatus.IN_TRIAGE
 
-        # Multi-step triage conversation
+        # Multi-step triage conversation with progressive information disclosure
         conversation_log = []
 
-        # Step 1: Nurse greeting and initial questions
-        initial_prompt = "A patient has just arrived for triage assessment. Begin by greeting them professionally, introducing yourself, and asking for their name and what brought them to the hospital today."
+        # Step 1: Nurse greeting - NO patient information provided yet
+        initial_prompt = "A patient has just arrived for triage assessment. Begin by greeting them professionally, introducing yourself, and asking for their name and what brought them to the hospital today. You don't know anything about their condition yet."
         nurse_greeting = available_nurse.agent.run(initial_prompt)
         conversation_log.append(f"NURSE: {nurse_greeting}")
 
-        # Step 2: Patient responds to greeting
+        # Step 2: Patient responds to greeting - reveals basic information
         patient_response_1 = patient.agent.run(
             f"You have just been called in for triage assessment. The triage nurse is greeting you. "
             f"Respond naturally to their greeting and questions. Here's what they said: {nurse_greeting}"
         )
         conversation_log.append(f"PATIENT: {patient_response_1}")
 
-        # Step 3: Nurse takes vital signs and asks detailed questions
-        detailed_assessment_prompt = f"The patient has responded to your greeting. Now take their vital signs and ask detailed questions about their symptoms, pain level (1-10 scale), how long they've been experiencing symptoms, and any relevant medical history. Patient's response was: {patient_response_1}"
-        nurse_assessment = available_nurse.agent.run(
-            detailed_assessment_prompt
-        )
-        conversation_log.append(f"NURSE: {nurse_assessment}")
+        # Step 3: Nurse asks about chief complaint - still limited information
+        complaint_prompt = f"The patient has responded to your greeting. Now ask specifically about their chief complaint - what brought them to the hospital today. Patient's response was: {patient_response_1}"
+        nurse_complaint_question = available_nurse.agent.run(complaint_prompt)
+        conversation_log.append(f"NURSE: {nurse_complaint_question}")
 
-        # Step 4: Patient provides detailed symptom information
-        patient_response_2 = patient.agent.run(
-            f"The nurse is now taking your vital signs and asking detailed questions about your symptoms. "
-            f"Provide specific information about your pain level, how you're feeling, and answer their questions honestly. "
-            f"The nurse said: {nurse_assessment}"
+        # Step 4: Patient describes their chief complaint
+        patient_complaint_response = patient.agent.run(
+            f"The nurse is asking about your chief complaint - what brought you to the hospital. "
+            f"Describe your main problem and why you came in. The nurse said: {nurse_complaint_question}"
         )
-        conversation_log.append(f"PATIENT: {patient_response_2}")
+        conversation_log.append(f"PATIENT: {patient_complaint_response}")
 
-        # Step 5: Nurse completes assessment and determines priority
+        # Step 5: Nurse asks about symptoms and pain level
+        symptoms_prompt = f"The patient has described their chief complaint. Now ask about their specific symptoms, pain level (1-10 scale), and how long they've been experiencing these symptoms. Patient's response was: {patient_complaint_response}"
+        nurse_symptoms_question = available_nurse.agent.run(symptoms_prompt)
+        conversation_log.append(f"NURSE: {nurse_symptoms_question}")
+
+        # Step 6: Patient provides detailed symptom information
+        patient_symptoms_response = patient.agent.run(
+            f"The nurse is asking about your specific symptoms and pain level. "
+            f"Provide detailed information about your symptoms, pain level (1-10), and how long you've had them. "
+            f"The nurse said: {nurse_symptoms_question}"
+        )
+        conversation_log.append(f"PATIENT: {patient_symptoms_response}")
+
+        # Step 7: Nurse takes vital signs and asks about medical history
+        vitals_prompt = f"The patient has described their symptoms. Now take their vital signs (blood pressure, heart rate, temperature, oxygen saturation) and ask about their medical history, current medications, and allergies. Patient's response was: {patient_symptoms_response}"
+        nurse_vitals_assessment = available_nurse.agent.run(vitals_prompt)
+        conversation_log.append(f"NURSE: {nurse_vitals_assessment}")
+
+        # Step 8: Patient provides medical history and vital signs response
+        patient_vitals_response = patient.agent.run(
+            f"The nurse is taking your vital signs and asking about your medical history. "
+            f"Provide information about your medical history, current medications, and allergies. "
+            f"Respond to the vital signs assessment. The nurse said: {nurse_vitals_assessment}"
+        )
+        conversation_log.append(f"PATIENT: {patient_vitals_response}")
+
+        # Step 9: Nurse completes assessment and determines priority - NO future context
         final_assessment_prompt = (
-            "Based on the patient's responses and the vital signs you've taken, complete your triage assessment. "
-            "Provide specific vital sign measurements, assign a priority level (Emergency/Urgent/Standard), and explain next steps to the patient. "
-            f"Patient's detailed response was: {patient_response_2}"
+            "Based on all the information the patient has provided, complete your triage assessment. "
+            "Provide the specific vital sign measurements you took, assign a priority level (Emergency/Urgent/Standard), "
+            "and explain what you found to the patient. "
+            f"Patient's response was: {patient_vitals_response}"
         )
-        nurse_conclusion = available_nurse.agent.run(
-            final_assessment_prompt
-        )
+        nurse_conclusion = available_nurse.agent.run(final_assessment_prompt)
         conversation_log.append(f"NURSE: {nurse_conclusion}")
 
-        # Step 6: Patient's final response
-        patient_response_3 = patient.agent.run(
-            f"The nurse has completed your triage assessment and is explaining the results and next steps. "
+        # Step 10: Patient's response
+        patient_final_response = patient.agent.run(
+            f"The nurse has completed your triage assessment and is explaining what they found. "
             f"Respond appropriately to what they've told you. The nurse said: {nurse_conclusion}"
         )
-        conversation_log.append(f"PATIENT: {patient_response_3}")
+        conversation_log.append(f"PATIENT: {patient_final_response}")
 
         # Extract vital signs from the conversation
         full_conversation = "\n".join(conversation_log)
-        patient.vital_signs = self._extract_vital_signs(
-            full_conversation
-        )
+        patient.vital_signs = self._extract_vital_signs(full_conversation)
         patient.calculate_priority()
         patient.assigned_nurse = available_nurse.name
 
@@ -1558,7 +1959,7 @@ Always engage in natural conversation and respond directly to what the patient t
         return full_conversation
 
     def _doctor_consultation(self, patient: Patient) -> str:
-        """Perform doctor consultation."""
+        """Perform doctor consultation using progressive information disclosure and research."""
         available_doctor = next(
             (d for d in self.doctors if d.is_available), None
         )
@@ -1577,47 +1978,115 @@ Always engage in natural conversation and respond directly to what the patient t
         patient.status = PatientStatus.WITH_DOCTOR
         patient.assigned_doctor = available_doctor.name
 
-        # Get patient history from EHR
-        patient_history = self.ehr_system.query_patient_history(
-            patient.patient_id
-        )
-        history_context = ""
-        if patient_history:
-            history_context = f"\n\nPATIENT HISTORY:\n{patient_history[0]['content']}"
+        # Progressive information disclosure for doctor consultation
+        conversation_log = []
 
-        # Doctor consultation
-        doctor_prompt = (
-            f"You are consulting with a patient. Review their triage results and medical history if available. "
-            f"Vital Signs: {json.dumps(patient.vital_signs, indent=2)}"
-            f"{history_context}\n\n"
-            f"Greet the patient, ask relevant questions about their condition, perform examination, "
-            f"and work towards a diagnosis and treatment plan."
-        )
-        consultation_result = available_doctor.agent.run(
-            doctor_prompt
-        )
+        # Step 1: Doctor greeting and initial assessment - limited information
+        initial_prompt = "A patient has been referred to you for consultation. Begin by greeting them professionally and asking about their chief complaint. You have basic triage information but need to conduct your own assessment."
+        doctor_greeting = available_doctor.agent.run(initial_prompt)
+        conversation_log.append(f"DOCTOR: {doctor_greeting}")
 
-        # Patient responds to doctor
-        patient_consultation_response = patient.agent.run(
-            f"You are now with the doctor for your consultation. The doctor is examining you and asking questions. "
-            f"Answer their questions honestly and describe your symptoms in detail: {consultation_result}"
+        # Step 2: Patient responds to doctor's greeting
+        patient_greeting_response = patient.agent.run(
+            f"You are now with the doctor for your consultation. The doctor is greeting you and asking about your problem. "
+            f"Respond naturally to their greeting and questions. The doctor said: {doctor_greeting}"
         )
+        conversation_log.append(f"PATIENT: {patient_greeting_response}")
 
-        # Doctor processes patient responses and finalizes diagnosis
-        final_consultation = available_doctor.agent.run(
-            f"Based on the patient's responses and your examination, provide your final diagnosis and treatment plan. "
-            f"Patient responses: {patient_consultation_response}"
-        )
+        # Step 3: Doctor asks about symptoms and medical history
+        symptoms_prompt = f"The patient has responded to your greeting. Now ask detailed questions about their symptoms, medical history, current medications, and allergies. Patient's response was: {patient_greeting_response}"
+        doctor_symptoms_question = available_doctor.agent.run(symptoms_prompt)
+        conversation_log.append(f"DOCTOR: {doctor_symptoms_question}")
 
-        # Extract diagnosis and treatment plan
-        diagnosis, treatment_plan = (
-            self._extract_diagnosis_and_treatment(final_consultation)
+        # Step 4: Patient provides detailed medical information
+        patient_symptoms_response = patient.agent.run(
+            f"The doctor is asking about your symptoms, medical history, medications, and allergies. "
+            f"Provide detailed information about your condition and medical background. "
+            f"The doctor said: {doctor_symptoms_question}"
         )
+        conversation_log.append(f"PATIENT: {patient_symptoms_response}")
+
+        # Step 5: Doctor performs physical examination
+        exam_prompt = f"The patient has provided their medical information. Now perform a focused physical examination based on their symptoms. Ask specific questions about their condition and examine relevant areas. Patient's response was: {patient_symptoms_response}"
+        doctor_examination = available_doctor.agent.run(exam_prompt)
+        conversation_log.append(f"DOCTOR: {doctor_examination}")
+
+        # Step 6: Patient responds to examination
+        patient_exam_response = patient.agent.run(
+            f"The doctor is performing a physical examination and asking specific questions. "
+            f"Respond to their examination and questions about your condition. "
+            f"The doctor said: {doctor_examination}"
+        )
+        conversation_log.append(f"PATIENT: {patient_exam_response}")
+
+        # Step 7: Doctor researches and considers diagnosis
+        research_prompt = f"Based on the patient's responses and your examination, you need to research possible conditions. Consider the symptoms and patient history to determine differential diagnoses. Patient's response was: {patient_exam_response}"
+        doctor_research = available_doctor.agent.run(research_prompt)
+        conversation_log.append(f"DOCTOR: {doctor_research}")
+
+        # Step 8: System performs medical research
+        patient_history = {
+            "age": patient.age,
+            "gender": patient.gender,
+            "medical_history": patient.medical_history,
+            "current_medications": patient.current_medications,
+            "allergies": patient.allergies,
+        }
+        
+        research_results = self.research_medical_condition(
+            patient.symptoms, patient_history
+        )
+        
+        # Step 9: Doctor considers research results and asks additional questions
+        research_consideration_prompt = f"You have researched the patient's condition. Based on your research, ask any additional questions needed to narrow down the diagnosis. Consider the differential diagnosis and express appropriate uncertainty. Research results indicate: {research_results['research_notes']}"
+        doctor_research_consideration = available_doctor.agent.run(research_consideration_prompt)
+        conversation_log.append(f"DOCTOR: {doctor_research_consideration}")
+
+        # Step 10: Patient provides additional information if needed
+        patient_additional_response = patient.agent.run(
+            f"The doctor has researched your condition and may ask additional questions. "
+            f"Provide any additional information that might be helpful. "
+            f"The doctor said: {doctor_research_consideration}"
+        )
+        conversation_log.append(f"PATIENT: {patient_additional_response}")
+
+        # Step 11: System determines diagnosis with uncertainty
+        diagnosis, confidence, is_correct = self.determine_diagnosis_with_uncertainty(
+            research_results, doctor_experience=0.8
+        )
+        
+        # Update simulation stats
+        if is_correct:
+            self.simulation_stats["correct_diagnoses"] += 1
+        else:
+            self.simulation_stats["misdiagnoses"] += 1
+
+        # Step 12: Doctor provides diagnosis and treatment plan with realistic uncertainty
+        diagnosis_prompt = f"Based on all the information gathered and your research, provide your diagnosis and treatment plan to the patient. Express appropriate uncertainty and confidence level. Remember that medicine is not perfect and you can make mistakes. Your research suggests: {research_results['research_notes']}"
+        doctor_diagnosis = available_doctor.agent.run(diagnosis_prompt)
+        conversation_log.append(f"DOCTOR: {doctor_diagnosis}")
+
+        # Step 13: Patient responds to diagnosis and treatment plan
+        patient_final_response = patient.agent.run(
+            f"The doctor has provided you with a diagnosis and treatment plan. "
+            f"Respond appropriately to what they've told you - ask questions if needed, express concerns, or show understanding. "
+            f"The doctor said: {doctor_diagnosis}"
+        )
+        conversation_log.append(f"PATIENT: {patient_final_response}")
+
+        # Extract diagnosis and treatment plan from the conversation
+        full_conversation = "\n".join(conversation_log)
+        
+        # Use the system-determined diagnosis (which may be incorrect)
         patient.diagnosis = diagnosis
-        patient.treatment_plan = treatment_plan
+        patient.treatment_plan = f"Treatment for {diagnosis.replace('_', ' ')}"
+        
+        # Add diagnosis accuracy information to conversation
+        accuracy_note = f"\n\n[SYSTEM NOTE: Diagnosis: {diagnosis}, Confidence: {confidence:.2f}, Correct: {is_correct}]"
+        conversation_log.append(accuracy_note)
 
         available_doctor.release_patient()
-        return f"CONSULTATION: {consultation_result}\n\nPATIENT: {patient_consultation_response}\n\nFINAL: {final_consultation}"
+        return full_conversation
 
     def _treatment_planning(self, patient: Patient) -> str:
         """Create comprehensive treatment plan."""
@@ -1784,6 +2253,16 @@ Always engage in natural conversation and respond directly to what the patient t
         print(
             f"Patient Satisfaction: {self.simulation_stats['patient_satisfaction']:.1f}%"
         )
+
+        # Diagnosis accuracy statistics
+        total_diagnoses = self.simulation_stats["correct_diagnoses"] + self.simulation_stats["misdiagnoses"]
+        if total_diagnoses > 0:
+            accuracy_rate = (self.simulation_stats["correct_diagnoses"] / total_diagnoses) * 100
+            print(f"\nDiagnosis Accuracy:")
+            print(f"  Correct Diagnoses: {self.simulation_stats['correct_diagnoses']}")
+            print(f"  Misdiagnoses: {self.simulation_stats['misdiagnoses']}")
+            print(f"  Accuracy Rate: {accuracy_rate:.1f}%")
+            print(f"  (Realistic medical error rate: ~15-20%)")
 
         # Staff performance
         print("\nStaff Performance:")
