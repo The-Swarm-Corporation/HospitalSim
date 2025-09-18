@@ -14,9 +14,11 @@ hospital_data
 build/
 develop-eggs/
 dist/
+experimental
 downloads/
 eggs/
 test_data
+hospital_sim_old
 .eggs/
 lib/
 lib64/

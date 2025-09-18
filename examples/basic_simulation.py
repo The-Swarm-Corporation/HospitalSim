@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+"""
+Basic Hospital Simulation Example
+
+This script demonstrates a basic hospital simulation with generated patients.
+"""
+
 from hospital_sim.main import HospitalSimulation
 from dotenv import load_dotenv
 
