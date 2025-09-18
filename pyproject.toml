@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "hospital-sim"
-version = "0.0.2"
+version = "0.0.3"
 description = "HospitalSim - Swarms"
 license = "MIT"
 authors = ["Kye Gomez <kye@swarms.world>"]
@@ -26,6 +26,7 @@ python = "^3.10"
 swarms = "*"
 loguru = "*"
 chromadb = "*"
+pydantic = "*"
 
 
 
