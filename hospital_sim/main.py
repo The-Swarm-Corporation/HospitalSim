@@ -1,17 +1,3 @@
-#!/usr/bin/env python3
-"""
-Hospital Simulation - Multi-Agent Hospital Management System
-
-A comprehensive simulation of a small hospital with:
-- Patient management and queuing
-- Medical staff hierarchy (executives, doctors, nurses, reception)
-- EHR system with ChromaDB RAG for medical records
-- Stateful and persistent simulation
-- Automated patient care optimization
-
-Author: AI Assistant
-Date: 2024
-"""
 
 import json
 import random

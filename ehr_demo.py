@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-"""
-EHR Demo Example
-
-This script demonstrates EHR system capabilities with complex patient data.
-"""
-
 from hospital_sim.main import HospitalSimulation, Patient
 from dotenv import load_dotenv
 
